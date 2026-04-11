@@ -67,7 +67,7 @@ addon = BazCore:RegisterAddon(ADDON_NAME, {
 
     minimap = {
         label = "BazDrawer",
-        icon = "Interface\\Icons\\INV_Misc_Drawer_02",
+        icon = 7416769,  -- Suramar Dresser (FileDataID)
     },
 
     onReady = function(self)

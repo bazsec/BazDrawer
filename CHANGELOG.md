@@ -1,5 +1,8 @@
 # BazDrawer Changelog
 
+## 003 - Real Drawer Icon
+- Switched both the addon settings icon and the minimap button icon to the Suramar Dresser FileDataID (7416769) — an actual in-game drawer model instead of the previous `INV_Misc_Drawer_02` path that didn't resolve to any real texture
+
 ## 002 - Icon Fix
 - Fixed missing in-game settings icon — TOC now references `Interface\Icons\INV_Misc_Drawer_02` (the same wooden drawer icon used by the minimap button) instead of a bundled PNG path that didn't exist
 
