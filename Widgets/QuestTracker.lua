@@ -22,8 +22,8 @@ local DESIGN_WIDTH = 260
 local MAX_HEIGHT_DEFAULT = 400    -- widget height cap; content beyond this scrolls
 local PAD          = 8
 local BLOCK_SPACING = 10          -- vertical gap between consecutive quest blocks
-local HEADER_AFTER_GAP  = 6       -- gap below a section header before its first block
-local GROUP_GAP         = 8       -- extra gap between one group's last block and the next header
+local HEADER_AFTER_GAP  = 8       -- gap below a section header before its first block
+local GROUP_GAP         = 18      -- extra gap between one group's last block and the next header
 local TITLE_HEIGHT = 18
 local OBJ_INDENT   = 14
 local OBJ_LINE_GAP = 2
@@ -34,6 +34,12 @@ local OBJ_RIGHT_PAD = 10          -- inset from block's right edge for
                                   -- run flush against the drawer border
 local SCENARIO_OBJ_GAP      = 6   -- gap between scenario stage box and first objective
 local SCENARIO_OBJ_LINE_GAP = 10  -- vertical gap between scenario boss lines
+
+-- Fixed widget set IDs used by Blizzard's scenario tracker for
+-- auxiliary widgets that sit above or below the scenario criteria.
+-- These are constants defined in Blizzard_ScenarioObjectiveTracker.lua.
+local SCENARIO_TRACKER_WIDGET_SET     = 252  -- bottom widgets (companion level, etc.)
+local SCENARIO_TRACKER_TOP_WIDGET_SET = 514  -- top widgets (above criteria)
 local NUB_SIZE     = 14           -- bullet "nub" icon size (orb/check)
 local NUB_TEXT_GAP = 5            -- gap between nub icon and objective text
 local HEADER_HEIGHT = 32          -- section header row (matches Blizzard atlas height)
@@ -338,9 +344,16 @@ local function GetScenarioData()
           scenarioType, _, textureKit, scenarioID = C_Scenario.GetInfo()
     if not scenarioName then return nil end
 
-    local stageName, stageDescription, numCriteria
+    local stageName, stageDescription, numCriteria, widgetSetID
     if C_Scenario.GetStepInfo then
-        stageName, stageDescription, numCriteria = C_Scenario.GetStepInfo()
+        -- C_Scenario.GetStepInfo returns 12 values; widgetSetID is #12.
+        -- It's the UIWidget set that drives Delve-specific elements
+        -- (tier badge, death counter, affix icons, map thumbnail).
+        local s1, s2, s3, _, _, _, _, _, _, _, _, s12 = C_Scenario.GetStepInfo()
+        stageName       = s1
+        stageDescription = s2
+        numCriteria     = s3
+        widgetSetID     = s12
     end
     numCriteria = numCriteria or 0
 
@@ -431,6 +444,7 @@ local function GetScenarioData()
         isComplete   = allComplete,
         sectionLabel = sectionLabel,
         textureKit   = textureKit,
+        widgetSetID  = widgetSetID,
     }
 end
 
@@ -487,6 +501,37 @@ local function CreateBlock()
     -- useAtlasSize=true so the border renders at its native dimensions.
     block.stageBg = block:CreateTexture(nil, "BORDER")
     block.stageBg:Hide()
+
+    -- UIWidget container for scenario-specific widgets (Delve tier badge,
+    -- death counter, affix icons, etc.). Registered to the step's
+    -- widgetSetID in PopulateBlock when present, which replaces the
+    -- static stageBg + title text with Blizzard's own widget rendering.
+    -- Uses UIWidgetContainerTemplate — a ResizeLayoutFrame that
+    -- auto-sizes to its widget children.
+    local widgetOk, widgetContainer = pcall(CreateFrame, "Frame", nil, block, "UIWidgetContainerTemplate")
+    if widgetOk and widgetContainer then
+        widgetContainer:Hide()
+        -- When the widget container resizes (Blizzard auto-populates
+        -- it with tier badges, death counters, etc. asynchronously),
+        -- we need to update our layout. However, we must be very
+        -- careful here: any layout/reflow we trigger can cascade
+        -- frame resizes that re-fire OnSizeChanged, creating an
+        -- infinite loop that eats all CPU time. Guard with a simple
+        -- "pending" flag so at most one deferred layout fires per
+        -- frame, and skip entirely if we're already inside a layout.
+        local sizeChangePending = false
+        widgetContainer:SetScript("OnSizeChanged", function()
+            if sizeChangePending then return end
+            sizeChangePending = true
+            C_Timer.After(0.1, function()
+                sizeChangePending = false
+                if QuestTracker and QuestTracker.ApplyLayout then
+                    QuestTracker:ApplyLayout()
+                end
+            end)
+        end)
+        block.widgetContainer = widgetContainer
+    end
 
     -- Title first, so the POI button can anchor its middle-right to the
     -- title's middle-left below (vertically centering the icon on the
@@ -650,6 +695,22 @@ local function ReleaseBlock(block)
     end
     if block.progressBar then block.progressBar:Hide() end
     if block.itemButton then block.itemButton:Hide() end
+    if block.widgetContainer then
+        block.widgetContainer:RegisterForWidgetSet(nil)
+        block._registeredWidgetSetID = nil
+        block.widgetContainer:Hide()
+    end
+    -- Return Blizzard's bottom widget container to its original parent
+    if block._bottomWidgetOrigParent then
+        local blizzBottom = _G.ScenarioObjectiveTracker
+            and _G.ScenarioObjectiveTracker.BottomWidgetContainerBlock
+            and _G.ScenarioObjectiveTracker.BottomWidgetContainerBlock.WidgetContainer
+        if blizzBottom then
+            blizzBottom:SetParent(block._bottomWidgetOrigParent)
+            blizzBottom:ClearAllPoints()
+        end
+        block._bottomWidgetOrigParent = nil
+    end
     table.insert(blockPool, block)
 end
 
@@ -787,22 +848,63 @@ local function PopulateBlock(block, quest)
     local isScenario    = (block._kind == "scenario")
     local hideIcon      = isAchievement or isScenario
 
-    -- Scenario stage background: set the atlas and size the title to
-    -- match. The atlas draws a decorative border around just the title;
-    -- objectives render outside/below the box (same as Blizzard).
+    -- Scenario stage block rendering. Two modes:
+    --
+    -- 1. widgetSetID present (Delves, some scenarios): register a
+    --    UIWidgetContainerTemplate that Blizzard auto-populates with
+    --    tier badge, death counter, affix icons, map thumbnail, etc.
+    --    The static stageBg atlas and title text are hidden — the
+    --    widget container replaces them entirely (same pattern as
+    --    Blizzard's own ScenarioObjectiveTrackerStageMixin:
+    --    UpdateWidgetRegistration).
+    --
+    -- 2. widgetSetID absent (dungeons, raids, M+): decorative
+    --    trackerheader atlas with the stage name inside it, same as
+    --    before.
+    local useWidgetSet = isScenario and quest.widgetSetID and block.widgetContainer
     if isScenario then
-        local textureKit = quest.textureKit or ""
-        local atlas = textureKit .. "-trackerheader"
-        if not C_Texture or not C_Texture.GetAtlasInfo
-           or not C_Texture.GetAtlasInfo(atlas) then
-            atlas = "evergreen-scenario-trackerheader"
+        if useWidgetSet then
+            block.stageBg:Hide()
+            block.widgetContainer:ClearAllPoints()
+            block.widgetContainer:SetPoint("TOPLEFT", block, "TOPLEFT", 0, 0)
+            block.widgetContainer:SetPoint("TOPRIGHT", block, "TOPRIGHT", 0, 0)
+            block.widgetContainer:Show()
+            -- Only re-register if the widgetSetID changed. Re-registering
+            -- the same ID causes Blizzard's widget initialization to replay
+            -- intro/flash animations from scratch every Refresh, producing
+            -- a looping flash on the death-counter and other widgets.
+            if block._registeredWidgetSetID ~= quest.widgetSetID then
+                block.widgetContainer:RegisterForWidgetSet(quest.widgetSetID)
+                block._registeredWidgetSetID = quest.widgetSetID
+            end
+        else
+            if block.widgetContainer then
+                if block._registeredWidgetSetID then
+                    block.widgetContainer:RegisterForWidgetSet(nil)
+                    block._registeredWidgetSetID = nil
+                end
+                block.widgetContainer:Hide()
+            end
+            local textureKit = quest.textureKit or ""
+            local atlas = textureKit .. "-trackerheader"
+            if not C_Texture or not C_Texture.GetAtlasInfo
+               or not C_Texture.GetAtlasInfo(atlas) then
+                atlas = "evergreen-scenario-trackerheader"
+            end
+            block.stageBg:SetAtlas(atlas, true)
+            block.stageBg:ClearAllPoints()
+            block.stageBg:SetPoint("TOPLEFT", block, "TOPLEFT", 0, 0)
+            block.stageBg:Show()
         end
-        block.stageBg:SetAtlas(atlas, true)
-        block.stageBg:ClearAllPoints()
-        block.stageBg:SetPoint("TOPLEFT", block, "TOPLEFT", 0, 0)
-        block.stageBg:Show()
     else
         block.stageBg:Hide()
+        if block.widgetContainer then
+            if block._registeredWidgetSetID then
+                block.widgetContainer:RegisterForWidgetSet(nil)
+                block._registeredWidgetSetID = nil
+            end
+            block.widgetContainer:Hide()
+        end
     end
 
     -- Configure POI button for quests only. Achievements and scenarios
@@ -831,51 +933,72 @@ local function PopulateBlock(block, quest)
         end
     end
 
-    -- Title anchoring. Scenarios center the title inside the decorative
-    -- stageBg box; achievements go flush-left; quests reserve an indent
-    -- wide enough for the POI icon.
+    -- Title anchoring. Widget-set scenarios hide the title entirely
+    -- (the widget container replaces it). Atlas-based scenarios center
+    -- the title inside the stageBg box. Achievements go flush-left.
+    -- Quests reserve an indent wide enough for the POI icon.
     block.title:ClearAllPoints()
-    if isScenario then
+    if useWidgetSet then
+        -- Widget container replaces the title — hide it
+        block.title:Hide()
+    elseif isScenario then
         -- Pin title to the stageBg with modest left/right padding so the
         -- text sits within the decorative border
         block.title:SetPoint("TOPLEFT",  block.stageBg, "TOPLEFT",  16, -8)
         block.title:SetPoint("BOTTOMRIGHT", block.stageBg, "BOTTOMRIGHT", -16, 8)
+        block.title:Show()
     elseif hideIcon then
         block.title:SetPoint("TOPLEFT", block, "TOPLEFT", 0, 0)
         block.title:SetPoint("TOPRIGHT", block, "TOPRIGHT", 0, 0)
+        block.title:Show()
     else
         block.title:SetPoint("TOPLEFT", block, "TOPLEFT", POI_SIZE + POI_GAP, 0)
         block.title:SetPoint("TOPRIGHT", block, "TOPRIGHT", 0, 0)
+        block.title:Show()
     end
 
     local titleIndent = (not hideIcon) and (POI_SIZE + POI_GAP) or 0
-    block.title.text:SetText(quest.title)
-    if isScenario then
-        -- Inside the stage box the title spans the full box minus padding
-        block.title.text:ClearAllPoints()
-        block.title.text:SetPoint("LEFT",  block.title, "LEFT",  0, 0)
-        block.title.text:SetPoint("RIGHT", block.title, "RIGHT", 0, 0)
-        block.title.text:SetJustifyH("LEFT")
-        block.title.text:SetJustifyV("MIDDLE")
-        -- Warm off-white matching Blizzard's ScenarioStageMixin text color
-        block.title.text:SetTextColor(1.0, 0.914, 0.682)
-    else
-        -- Quest / achievement title: constrain width with the same
-        -- right-edge inset used by the objective lines so long titles
-        -- don't hug the drawer border when they wrap.
-        block.title.text:SetWidth(DESIGN_WIDTH - PAD * 2 - titleIndent - OBJ_RIGHT_PAD)
-        block.title.text:SetTextColor(GetTitleColor())
+
+    -- Title text setup (skip if widget set replaced the title entirely)
+    if not useWidgetSet then
+        block.title.text:SetText(quest.title)
+        if isScenario then
+            -- Inside the stage box the title spans the full box minus padding
+            block.title.text:ClearAllPoints()
+            block.title.text:SetPoint("LEFT",  block.title, "LEFT",  0, 0)
+            block.title.text:SetPoint("RIGHT", block.title, "RIGHT", 0, 0)
+            block.title.text:SetJustifyH("LEFT")
+            block.title.text:SetJustifyV("MIDDLE")
+            -- Warm off-white matching Blizzard's ScenarioStageMixin text color
+            block.title.text:SetTextColor(1.0, 0.914, 0.682)
+        else
+            -- Quest / achievement title: constrain width with the same
+            -- right-edge inset used by the objective lines so long titles
+            -- don't hug the drawer border when they wrap.
+            block.title.text:SetWidth(DESIGN_WIDTH - PAD * 2 - titleIndent - OBJ_RIGHT_PAD)
+            block.title.text:SetTextColor(GetTitleColor())
+        end
     end
 
     local titleH
-    if isScenario then
+    if useWidgetSet then
+        -- Widget container drives the title area height. Blizzard
+        -- auto-populates it with tier badge, death counter, affix
+        -- icons, etc. We read its computed height after registration.
+        -- GetHeight may return 0 on the first frame before the widget
+        -- layout pass fires, so we floor at 60 (a reasonable Delve
+        -- block minimum that prevents a 0-height slot on the first
+        -- reflow).
+        titleH = block.widgetContainer:GetHeight()
+        if not titleH or titleH < 60 then titleH = 60 end
+        local wW = block.widgetContainer:GetWidth()
+        if wW and wW > 0 then
+            block:SetWidth(math.max(DESIGN_WIDTH - PAD * 2, wW))
+        end
+    elseif isScenario then
         -- The stageBg's native atlas size drives the title area height.
-        -- The title text is anchored inside it so it doesn't need its
-        -- own explicit height set here.
         titleH = block.stageBg:GetHeight() or 40
         if titleH < 40 then titleH = 40 end
-        -- Widen the block to fit the native atlas width if needed so the
-        -- decorative border isn't cropped.
         local atlasW = block.stageBg:GetWidth() or 0
         if atlasW > 0 then
             block:SetWidth(math.max(DESIGN_WIDTH - PAD * 2, atlasW))
@@ -897,10 +1020,14 @@ local function PopulateBlock(block, quest)
     -- height even for wrapped text. Anchors alone don't tell the
     -- FontString how wide it is for wrap calculation.
     --
-    -- Scenarios anchor the objective list below the decorative stage
-    -- box (not below the title inside the box), with a small fixed gap.
+    -- Scenarios anchor the objective list below the stage element
+    -- (widget container or decorative atlas). Quests/achievements
+    -- anchor below the title.
     local anchorTo, anchorGap
-    if isScenario then
+    if useWidgetSet then
+        anchorTo  = block.widgetContainer
+        anchorGap = SCENARIO_OBJ_GAP
+    elseif isScenario then
         anchorTo  = block.stageBg
         anchorGap = SCENARIO_OBJ_GAP
     else
@@ -1060,6 +1187,32 @@ local function PopulateBlock(block, quest)
             block.itemButton:Hide()
             -- Restore full-width title text (re-anchored on next
             -- PopulateBlock call, but keep it clean here).
+        end
+    end
+
+    -- Bottom scenario widgets (companion level badge, etc.). We
+    -- reparent Blizzard's own BottomWidgetContainerBlock.WidgetContainer
+    -- into our block rather than creating a second registration for
+    -- widget set 252 (which is a global singleton — two frames can't
+    -- both register for the same set). When we leave the scenario,
+    -- ReleaseBlock returns it to its original parent.
+    local blizzBottom = _G.ScenarioObjectiveTracker
+        and _G.ScenarioObjectiveTracker.BottomWidgetContainerBlock
+        and _G.ScenarioObjectiveTracker.BottomWidgetContainerBlock.WidgetContainer
+    if blizzBottom then
+        if isScenario then
+            if not block._bottomWidgetOrigParent then
+                block._bottomWidgetOrigParent = blizzBottom:GetParent()
+            end
+            blizzBottom:SetParent(block)
+            blizzBottom:ClearAllPoints()
+            blizzBottom:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT",
+                0, -(objTotalH + SCENARIO_OBJ_GAP))
+            blizzBottom:Show()
+            local bwH = blizzBottom:GetHeight() or 0
+            if bwH > 0 then
+                objTotalH = objTotalH + SCENARIO_OBJ_GAP + bwH
+            end
         end
     end
 

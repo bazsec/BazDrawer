@@ -1,5 +1,18 @@
 # BazDrawer Changelog
 
+## 008 - Delve UIWidget Support, Spacing Overhaul
+### Delve / Scenario Stage Block
+- **UIWidget container** — scenario stage blocks now embed a `UIWidgetContainerTemplate` registered to the step's `widgetSetID` from `C_Scenario.GetStepInfo()`. This renders Blizzard's own Delve-specific widgets (tier badge, death counter, affix icons, map thumbnail) inside the quest tracker, matching the default tracker's Delve stage block. When a `widgetSetID` is present, the decorative atlas + title text are hidden — the widget container replaces them entirely, same pattern as Blizzard's own `ScenarioObjectiveTrackerStageMixin:UpdateWidgetRegistration`.
+- **Companion level badge** — reparents Blizzard's `ScenarioObjectiveTracker.BottomWidgetContainerBlock.WidgetContainer` (widget set 252) into the scenario block below the objectives. This is Blizzard's real frame moved into our layout — we don't create a duplicate registration, avoiding the global-singleton conflict that would steal the widget set from Blizzard's tracker. The frame is returned to its original parent on block release.
+- **Widget set guard** — tracks `block._registeredWidgetSetID` so `RegisterForWidgetSet` is only called when the widget set ID actually changes, preventing intro/flash animations from replaying on every `Refresh` cycle.
+- **OnSizeChanged throttle** — widget container resize events trigger a throttled (0.1s) `ApplyLayout` instead of a full `Refresh`, breaking the infinite teardown→rebuild→resize→OnSizeChanged loop that was causing execution time limit errors and animation replay.
+- Falls back to the decorative `<textureKit>-trackerheader` atlas rendering for scenarios without a `widgetSetID` (dungeons, raids, M+, proving grounds).
+
+### Spacing Overhaul
+- `GROUP_GAP` increased from 8 to 18 — the vertical gap above each section header is now visually consistent and generous enough to separate tall Delve widget blocks from the section that follows.
+- `HEADER_AFTER_GAP` increased from 6 to 8 — the gap below a section header before its first block, slightly more breathing room.
+- Spacing is now uniform across all group transitions (Delves → Campaign, Campaign → Quests, Quests → Achievements, etc.).
+
 ## 007 - Quest Tracker: Checkmarks, Progress Bars, Quest Item Buttons
 ### Quest Tracker
 - **Green checkmarks on completed objectives** — finished quest and achievement objectives now show a green `ui-questtracker-tracker-check` icon in place of the "- " dash prefix, matching Blizzard's default tracker. The check icon is vertically centered on the first line of text and the objective text renders in the dimmed "Complete" color.
