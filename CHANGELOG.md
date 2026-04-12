@@ -1,5 +1,29 @@
 # BazDrawer Changelog
 
+## 005 - Zone Widget, Queue Eye, Custom Button Order, Zygor Compat
+### New Widgets
+- **Zone** widget — centered zone text in its own dedicated widget. Auto-colored by PVP status (gold neutral, green friendly, red hostile, orange contested, light blue sanctuary). Updates on all `ZONE_CHANGED*` events.
+
+### Minimap Buttons Widget
+- **Queue eye adoption** — Blizzard's `QueueStatusButton` (the dungeon/raid/PVP LFG eye) is now captured into the button grid when you queue. It appears dynamically on queue and disappears when you leave, rescaled to match the other button sizes while preserving its glow and click behavior.
+- **Fixed slot grid** — refactored from computed SetPoint offsets to pre-built slot frames. Each adopted button is reparented into its slot and anchored to its center, making positioning immune to Blizzard SetPoint clobbering and eliminating a whole class of layout race conditions.
+- **Custom button order** — new "Button Order" section on the widget settings page with Move Up / Move Down controls for each adopted button. The order is persisted per-character and honored by the grid layout; new buttons are auto-appended. Friendly names strip the `LibDBIcon10_` prefix and CamelCase-split (e.g. `LibDBIcon10_BazNotificationCenter` → `Baz Notification Center`).
+- **Queue eye visibility hooks** — `hooksecurefunc` on `QueueStatusButton:Show/Hide` triggers immediate relayout when Blizzard flips queue state, with a `layoutInProgress` reentry guard to prevent recursion.
+
+### Minimap Info Bar
+- **Zone text moved out** — the scrolling zone label has been removed from the Info Bar (it lives in the new Zone widget now). The Info Bar is now a clean right-cluster of Clock + Calendar + Tracking with empty left space reserved for future info buttons.
+- **Calendar hover color** — the day-of-month number tints from `#A29580` tan to `#BA9B51` warm gold on mouseover.
+
+### Quest Tracker
+- **POI-to-title padding** — `POI_GAP` bumped from 4px to 8px so the super-track icons aren't flush against the quest title text.
+- **Objective right-edge padding** — new `OBJ_RIGHT_PAD = 10` constant reserves breathing room between objective text and the drawer's right border. Applied to both objective lines and quest/achievement titles so long wrapped text doesn't hug the edge.
+
+### Third-party Compatibility
+- **Zygor Guides Viewer shim** (`Compat.lua`) — pre-hooks `ZGV.NotificationCenter.UpdatePosition` with a nil-guard that defers and retries when `ZygorGuidesViewerMapIcon:GetLeft()` returns nil during Zygor's threaded `NC2 startup` phase. Fixes "attempt to compare number with nil" that happens when BazDrawer reparents the minimap before Zygor's anchor chain has resolved. Installs only when Zygor is loaded; uses `ADDON_LOADED` so load order doesn't matter.
+
+### Assorted polish
+- Zone widget padding tightened — auto-sizes to actual font string height instead of the inflated hardcoded minimum.
+
 ## 004 - CurseForge Project Metadata
 - Added `X-Curse-Project-ID: 1511379` and `X-Website` TOC headers so the BigWigs packager can upload releases to CurseForge automatically
 

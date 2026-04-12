@@ -2,7 +2,7 @@
 ## Title: BazDrawer
 ## Notes: Slide-out side drawer that hosts docked Baz Suite widgets
 ## Author: Baz4k
-## Version: 004
+## Version: 005
 ## X-License: GPL v2
 ## Category: Baz Suite
 ## X-Category: Interface Enhancements
@@ -13,6 +13,7 @@
 ## SavedVariables: BazDrawerDB
 
 Core.lua
+Compat.lua
 Drawer.lua
 WidgetHost.lua
 Settings.lua
@@ -20,4 +21,5 @@ Widgets\Repair.lua
 Widgets\MinimapButtons.lua
 Widgets\Minimap.lua
 Widgets\MinimapInfoBar.lua
+Widgets\ZoneText.lua
 Widgets\QuestTracker.lua

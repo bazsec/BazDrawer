@@ -1,9 +1,10 @@
 -- BazDrawer Widget: Minimap Info Bar
 --
--- Horizontal bar that combines a custom zone text (left, left-aligned),
--- the Blizzard clock button, the calendar/game-time button, and the
--- minimap tracking button (far right). Registered as a dockable
--- BazDrawer widget.
+-- Horizontal bar that combines the Blizzard clock button, the
+-- calendar/game-time button, and the minimap tracking button.
+-- Centered inside the widget so additional info buttons can be added
+-- to the left or right later (e.g. bag count, mail, gold, fps/ms).
+-- Zone text lives in its own Zone widget now.
 --
 -- Replaces (and supersedes) BazMiniMap/InfoBar.lua. Like the Minimap
 -- widget, disable BazMiniMap after enabling this widget to avoid
@@ -22,12 +23,14 @@ addon.InfoBarWidget = InfoBarWidget
 
 local wrapper
 local widgetInfo
-local zoneText
 local isAttached = false
 
 ---------------------------------------------------------------------------
 -- Attach the three native frames into the wrapper in the layout:
---   [ Zone text ...                         Clock  Tracking ]
+--   [ ...empty left side...     Clock  Calendar  Tracking ]
+-- Left side is intentionally empty so additional info buttons (bag
+-- count, mail, gold, fps/ms, etc.) can be added later without
+-- disturbing the existing right cluster.
 ---------------------------------------------------------------------------
 
 local function AttachFrames()
@@ -101,6 +104,11 @@ local function AttachFrames()
         if ToggleCalendar then ToggleCalendar() end
     end)
     calendarBtn:SetScript("OnEnter", function(self)
+        -- Hover color #BA9B51 — a slightly brighter warm gold than the
+        -- at-rest #A29580 tan so the button reads as interactive.
+        if self.text then
+            self.text:SetTextColor(0xBA / 255, 0x9B / 255, 0x51 / 255)
+        end
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:SetText("Calendar")
         GameTooltip:AddLine("Click to open the calendar", 1, 1, 1, true)
@@ -110,7 +118,13 @@ local function AttachFrames()
         end
         GameTooltip:Show()
     end)
-    calendarBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    calendarBtn:SetScript("OnLeave", function(self)
+        -- Restore the at-rest tan color
+        if self.text then
+            self.text:SetTextColor(0xA2 / 255, 0x95 / 255, 0x80 / 255)
+        end
+        GameTooltip:Hide()
+    end)
 
     -- Event-driven refresh + periodic fallback (every 60s) for the day rollover
     local ev = CreateFrame("Frame", nil, calendarBtn)
@@ -163,11 +177,6 @@ local function AttachFrames()
     end
     AttachClock()
 
-    -- Refresh zone text
-    if zoneText then
-        zoneText:SetText(GetMinimapZoneText() or "")
-    end
-
     isAttached = true
 end
 
@@ -180,23 +189,6 @@ function InfoBarWidget:Init()
 
     wrapper = CreateFrame("Frame", "BazDrawerMinimapInfoBarWrapper", UIParent)
     wrapper:SetSize(DESIGN_WIDTH, DESIGN_HEIGHT)
-
-    -- Zone text — left-aligned from the bar's left edge, nudged up 1px
-    -- so its baseline sits above the wrapper midline (matches the visual
-    -- baseline of the clock text on the right).
-    zoneText = wrapper:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    zoneText:SetPoint("LEFT", wrapper, "LEFT", PAD, 1)
-    zoneText:SetJustifyH("LEFT")
-    zoneText:SetText(GetMinimapZoneText() or "")
-
-    -- Update zone text on zone change events
-    local ev = CreateFrame("Frame")
-    ev:RegisterEvent("ZONE_CHANGED")
-    ev:RegisterEvent("ZONE_CHANGED_INDOORS")
-    ev:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-    ev:SetScript("OnEvent", function()
-        if zoneText then zoneText:SetText(GetMinimapZoneText() or "") end
-    end)
 
     widgetInfo = {
         id           = WIDGET_ID,

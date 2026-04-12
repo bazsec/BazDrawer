@@ -28,7 +28,10 @@ local TITLE_HEIGHT = 18
 local OBJ_INDENT   = 14
 local OBJ_LINE_GAP = 2
 local POI_SIZE     = 20           -- POI button width/height
-local POI_GAP      = 4            -- space between POI button and title
+local POI_GAP      = 8            -- space between POI button and title
+local OBJ_RIGHT_PAD = 10          -- inset from block's right edge for
+                                  -- objective text so long lines don't
+                                  -- run flush against the drawer border
 local SCENARIO_OBJ_GAP      = 6   -- gap between scenario stage box and first objective
 local SCENARIO_OBJ_LINE_GAP = 10  -- vertical gap between scenario boss lines
 local NUB_SIZE     = 14           -- bullet "nub" icon size (orb/check)
@@ -781,7 +784,10 @@ local function PopulateBlock(block, quest)
         -- Warm off-white matching Blizzard's ScenarioStageMixin text color
         block.title.text:SetTextColor(1.0, 0.914, 0.682)
     else
-        block.title.text:SetWidth(DESIGN_WIDTH - PAD * 2 - titleIndent)
+        -- Quest / achievement title: constrain width with the same
+        -- right-edge inset used by the objective lines so long titles
+        -- don't hug the drawer border when they wrap.
+        block.title.text:SetWidth(DESIGN_WIDTH - PAD * 2 - titleIndent - OBJ_RIGHT_PAD)
         block.title.text:SetTextColor(GetTitleColor())
     end
 
@@ -827,7 +833,10 @@ local function PopulateBlock(block, quest)
     end
 
     local leftIndent = OBJ_INDENT
-    local objWidth   = DESIGN_WIDTH - PAD * 2 - leftIndent
+    -- Subtract OBJ_RIGHT_PAD so long objective lines (including wrapped
+    -- ones) have breathing room from the block's right edge instead of
+    -- hugging the drawer border.
+    local objWidth   = DESIGN_WIDTH - PAD * 2 - leftIndent - OBJ_RIGHT_PAD
     -- Scenarios reserve space for the bullet icon on the left
     if isScenario then
         objWidth = objWidth - (NUB_SIZE + NUB_TEXT_GAP)
