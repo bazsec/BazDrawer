@@ -101,6 +101,11 @@ function QT.CreateBlock()
 
         -- Quest
         if button == "LeftButton" then
+            -- Auto-complete quests: open the turn-in dialog directly
+            if block._isAutoComplete and block._isComplete and ShowQuestComplete then
+                ShowQuestComplete(block._questID)
+                return
+            end
             if C_SuperTrack and C_SuperTrack.SetSuperTrackedQuestID then
                 C_SuperTrack.SetSuperTrackedQuestID(block._questID)
             end
@@ -151,6 +156,7 @@ function QT.CreateBlock()
     bar:Hide()
     block.progressBar = bar
 
+
     block.objectives = {}
     return block
 end
@@ -173,6 +179,8 @@ function QT.ReleaseBlock(block)
     block._title = nil
     block._titleColor = nil
     block._kind = nil
+    block._isAutoComplete = nil
+    block._isComplete = nil
     for _, line in ipairs(block.objectives) do
         if line and line.Hide then line:Hide() end
     end
@@ -204,6 +212,8 @@ function QT.PopulateBlock(block, quest)
     block._questID = quest.id
     block._title = quest.title
     block._kind = quest.kind or "quest"
+    block._isAutoComplete = quest.isAutoComplete
+    block._isComplete = quest.isComplete
 
     local isAchievement = (block._kind == "achievement")
     local isScenario    = (block._kind == "scenario")

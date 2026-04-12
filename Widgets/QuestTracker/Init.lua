@@ -11,6 +11,153 @@ local C  = QT.C
 addon.QuestTrackerWidget = QT
 
 ---------------------------------------------------------------------------
+-- Auto-complete popup (singleton frame, reused each Refresh)
+---------------------------------------------------------------------------
+
+local autoCompletePopup
+
+local function EnsureAutoCompletePopup()
+    if autoCompletePopup then return autoCompletePopup end
+
+    local popup = CreateFrame("Button", nil, QT.frame or UIParent)
+    popup:SetHeight(68)
+    popup:Hide()
+
+    -- Dark background (inset from the icon area)
+    popup.bg = popup:CreateTexture(nil, "BACKGROUND")
+    popup.bg:SetPoint("TOPLEFT", 36, -4)
+    popup.bg:SetPoint("BOTTOMRIGHT", 0, 4)
+    popup.bg:SetColorTexture(0, 0, 0, 0.5)
+
+    -- Ornamental gold border — all pieces from Interface\QuestFrame\AutoQuest-Parts
+    local PARTS = "Interface\\QuestFrame\\AutoQuest-Parts"
+
+    local borderTL = popup:CreateTexture(nil, "BORDER")
+    borderTL:SetTexture(PARTS)
+    borderTL:SetSize(16, 16)
+    borderTL:SetTexCoord(0.02539063, 0.05664063, 0.01562500, 0.26562500)
+    borderTL:SetPoint("TOPLEFT", 32, 0)
+
+    local borderTR = popup:CreateTexture(nil, "BORDER")
+    borderTR:SetTexture(PARTS)
+    borderTR:SetSize(16, 16)
+    borderTR:SetTexCoord(0.02539063, 0.05664063, 0.29687500, 0.54687500)
+    borderTR:SetPoint("TOPRIGHT", 0, 0)
+
+    local borderBL = popup:CreateTexture(nil, "BORDER")
+    borderBL:SetTexture(PARTS)
+    borderBL:SetSize(16, 16)
+    borderBL:SetTexCoord(0.02539063, 0.05664063, 0.57812500, 0.82812500)
+    borderBL:SetPoint("BOTTOMLEFT", 32, 0)
+
+    local borderBR = popup:CreateTexture(nil, "BORDER")
+    borderBR:SetTexture(PARTS)
+    borderBR:SetSize(16, 16)
+    borderBR:SetTexCoord(0.06054688, 0.09179688, 0.01562500, 0.26562500)
+    borderBR:SetPoint("BOTTOMRIGHT", 0, 0)
+
+    local borderL = popup:CreateTexture(nil, "BORDER")
+    borderL:SetTexture("Interface\\QuestFrame\\AutoQuestToastBorder-LeftRight")
+    borderL:SetTexCoord(0, 0.5, 0, 1)
+    borderL:SetWidth(8)
+    borderL:SetPoint("TOPLEFT", borderTL, "BOTTOMLEFT")
+    borderL:SetPoint("BOTTOMLEFT", borderBL, "TOPLEFT")
+
+    local borderR = popup:CreateTexture(nil, "BORDER")
+    borderR:SetTexture("Interface\\QuestFrame\\AutoQuestToastBorder-LeftRight")
+    borderR:SetTexCoord(0.5, 1, 0, 1)
+    borderR:SetWidth(8)
+    borderR:SetPoint("TOPRIGHT", borderTR, "BOTTOMRIGHT")
+    borderR:SetPoint("BOTTOMRIGHT", borderBR, "TOPRIGHT")
+
+    local borderT = popup:CreateTexture(nil, "BORDER")
+    borderT:SetTexture("Interface\\QuestFrame\\AutoQuestToastBorder-TopBot")
+    borderT:SetTexCoord(0, 1, 0, 0.5)
+    borderT:SetHeight(8)
+    borderT:SetPoint("TOPLEFT", borderTL, "TOPRIGHT")
+    borderT:SetPoint("TOPRIGHT", borderTR, "TOPLEFT")
+
+    local borderB = popup:CreateTexture(nil, "BORDER")
+    borderB:SetTexture("Interface\\QuestFrame\\AutoQuestToastBorder-TopBot")
+    borderB:SetTexCoord(0, 1, 0.5, 1)
+    borderB:SetHeight(8)
+    borderB:SetPoint("BOTTOMLEFT", borderBL, "BOTTOMRIGHT")
+    borderB:SetPoint("BOTTOMRIGHT", borderBR, "BOTTOMLEFT")
+
+    -- Question mark icon (left side, overlapping the border)
+    popup.iconBg = popup:CreateTexture(nil, "ARTWORK")
+    popup.iconBg:SetSize(60, 60)
+    popup.iconBg:SetPoint("CENTER", popup, "LEFT", 36, 0)
+    popup.iconBg:SetTexture("Interface\\QuestFrame\\AutoQuest-Parts")
+    popup.iconBg:SetTexCoord(0.30273438, 0.41992188, 0.01562500, 0.95312500)
+
+    popup.questionMark = popup:CreateTexture(nil, "ARTWORK", nil, 1)
+    popup.questionMark:SetTexture(PARTS)
+    popup.questionMark:SetSize(19, 33)
+    popup.questionMark:SetTexCoord(0.17578125, 0.21289063, 0.01562500, 0.53125000)
+    popup.questionMark:SetPoint("CENTER", popup.iconBg, "CENTER", 0.5, 0)
+
+    -- Gold badge border ring around the icon
+    popup.badgeBorder = popup:CreateTexture(nil, "ARTWORK", nil, 2)
+    popup.badgeBorder:SetAtlas("AutoQuest-badgeborder", true)
+    popup.badgeBorder:SetPoint("TOPLEFT", popup.iconBg, "TOPLEFT", 8, -8)
+
+    -- "Click to complete quest" header
+    popup.topText = popup:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    popup.topText:SetPoint("TOPLEFT", popup.iconBg, "TOPRIGHT", -6, -6)
+    popup.topText:SetPoint("RIGHT", popup, "RIGHT", -12, 0)
+    popup.topText:SetText(_G.QUEST_WATCH_POPUP_CLICK_TO_COMPLETE or "Click to complete quest")
+
+    -- Quest name in large serif font
+    popup.questName = popup:CreateFontString(nil, "OVERLAY", "QuestFont_Large")
+    popup.questName:SetPoint("TOPLEFT", popup.topText, "BOTTOMLEFT", 0, -2)
+    popup.questName:SetPoint("RIGHT", popup, "RIGHT", -12, 0)
+    popup.questName:SetTextColor(1, 1, 1)
+
+
+    -- Red pulse on the ? icon only — a red-tinted copy of the icon
+    -- background that pulses via a BOUNCE animation group.
+    popup.iconPulse = popup:CreateTexture(nil, "ARTWORK", nil, 3)
+    popup.iconPulse:SetAllPoints(popup.iconBg)
+    popup.iconPulse:SetTexture("Interface\\QuestFrame\\AutoQuest-Parts")
+    popup.iconPulse:SetTexCoord(0.30273438, 0.41992188, 0.01562500, 0.95312500)
+    popup.iconPulse:SetVertexColor(1, 0, 0)
+    popup.iconPulse:SetBlendMode("ADD")
+    popup.iconPulse:SetAlpha(0)
+
+    local pulseAG = popup.iconPulse:CreateAnimationGroup()
+    pulseAG:SetLooping("BOUNCE")
+    local pulse = pulseAG:CreateAnimation("Alpha")
+    pulse:SetFromAlpha(0)
+    pulse:SetToAlpha(0.5)
+    pulse:SetDuration(0.75)
+    popup._pulseAG = pulseAG
+
+    popup:HookScript("OnShow", function(self)
+        if self._pulseAG then self._pulseAG:Play() end
+    end)
+    popup:HookScript("OnHide", function(self)
+        if self._pulseAG then self._pulseAG:Stop() end
+    end)
+
+    popup:SetScript("OnClick", function(self)
+        if self._questID and ShowQuestComplete then
+            ShowQuestComplete(self._questID)
+        end
+    end)
+    popup:SetScript("OnEnter", function(self)
+        self.bg:SetColorTexture(0.1, 0.1, 0.1, 0.7)
+    end)
+    popup:SetScript("OnLeave", function(self)
+        self.bg:SetColorTexture(0, 0, 0, 0.5)
+    end)
+    popup:RegisterForClicks("LeftButtonUp")
+
+    autoCompletePopup = popup
+    return popup
+end
+
+---------------------------------------------------------------------------
 -- Build — create the main widget frame
 ---------------------------------------------------------------------------
 
@@ -45,6 +192,9 @@ function QT.Refresh()
     for _, h in ipairs(QT.activeHeaders) do QT.ReleaseHeader(h) end
     wipe(QT.activeHeaders)
     wipe(QT.items)
+
+    -- Hide the auto-complete popup from the previous frame
+    if autoCompletePopup then autoCompletePopup:Hide() end
 
     local groups = {}
     local groupOrder = {}
@@ -145,6 +295,18 @@ function QT.Refresh()
         end
     end
 
+    -- Bonus objectives (area task quests — auto-track when you enter
+    -- the zone, auto-hide when you leave). Sorted after achievements.
+    local bonusObjs = QT.GetBonusObjectives()
+    if #bonusObjs > 0 then
+        local bonusGroupIdx = 200
+        groups[bonusGroupIdx] = {
+            label  = _G.TRACKER_HEADER_BONUS_OBJECTIVES or "Bonus Objectives",
+            quests = bonusObjs,
+        }
+        table.insert(groupOrder, bonusGroupIdx)
+    end
+
     table.sort(groupOrder)
 
     -- Build flat items list
@@ -165,6 +327,26 @@ function QT.Refresh()
             })
 
             if not collapsed then
+                -- Check for auto-complete quests — show the popup
+                -- inside this group, before the quest blocks
+                for _, quest in ipairs(group.quests) do
+                    if quest.isAutoComplete and quest.isComplete then
+                        local popup = EnsureAutoCompletePopup()
+                        if popup then
+                            popup._questID = quest.id
+                            popup.questName:SetText(quest.title)
+                            popup:SetParent(QT.frame)
+                            table.insert(QT.items, {
+                                frame  = popup,
+                                height = 68,
+                                gap    = C.BLOCK_SPACING,
+                                kind   = "popup",
+                            })
+                        end
+                        break  -- only one popup at a time
+                    end
+                end
+
                 for _, quest in ipairs(group.quests) do
                     local block = QT.AcquireBlock()
                     local h = QT.PopulateBlock(block, quest)
@@ -312,6 +494,7 @@ function QT.Init()
     f:RegisterEvent("QUEST_WATCH_LIST_CHANGED")
     f:RegisterEvent("QUEST_ACCEPTED")
     f:RegisterEvent("QUEST_REMOVED")
+    f:RegisterEvent("QUEST_AUTOCOMPLETE")
     f:RegisterEvent("PLAYER_ENTERING_WORLD")
     f:RegisterEvent("SUPER_TRACKING_CHANGED")
     f:RegisterEvent("TRACKED_ACHIEVEMENT_UPDATE")

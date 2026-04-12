@@ -1,5 +1,15 @@
 # BazDrawer Changelog
 
+## 012 - Auto-Complete Popup, Bonus Objectives, Whitelist Filter
+### Quest Tracker
+- **Auto-complete quest popup** — quests with `isAutoComplete` that are ready to turn in now show a decorative popup inside the Quests group with Blizzard's question mark icon, gold ornamental border (all 8 pieces from AutoQuest-Parts tex coords), serif quest name in `QuestFont_Large`, and "Click to complete quest" header. Clicking opens the turn-in dialog via `ShowQuestComplete(questID)`. The question mark icon pulses red via a BOUNCE animation group.
+- **Title click for auto-complete** — left-clicking the quest title also calls `ShowQuestComplete` when the quest is auto-completable, matching Blizzard's default tracker behavior
+- **Bonus Objectives section** — area task quests (bonus objectives that auto-track when you enter the zone) now appear in a "Bonus Objectives" group at the bottom of the tracker, using `GetTasksTable()` + `GetTaskInfo()` to detect in-area tasks that aren't world quests or already-watched quests
+- **`QUEST_AUTOCOMPLETE` event** registered for immediate refresh when a quest becomes auto-completable
+
+### Minimap Buttons Widget
+- **Whitelist adoption filter** — switched from blacklist ("adopt everything except Blizzard frames") to whitelist (`LibDBIcon10_*` prefix + known buttons table). Prevents map-pin addons like HandyNotes from flooding the grid with invisible pin frames. Zygor's map icon whitelisted explicitly.
+
 ## 011 - Minimap Buttons: Centered Grid, Persistent Eye Capture, Eye-First Sort
 ### Minimap Buttons Widget
 - **Centered button grid** — the grid now computes how many columns are actually occupied and horizontally centers them within the widget instead of left-aligning from the padding edge. Re-centers dynamically when the queue eye appears or disappears.

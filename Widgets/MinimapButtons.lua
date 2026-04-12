@@ -49,23 +49,20 @@ local QUEUE_EYE_EVENTS = {
 }
 
 ---------------------------------------------------------------------------
--- Adoption filter: any named Button child of Minimap. In Midnight, all
--- Blizzard minimap chrome (zoom, tracking, zone text, etc.) lives under
--- MinimapCluster — direct children of Minimap are effectively just addon
--- buttons: LibDBIcon ones (LibDBIcon10_*), custom ones like
--- BazCoreMinimapButton, HandyNotes, Rematch, etc. A blacklist of known
--- Blizzard names keeps us safe if any slip through.
+-- Adoption filter. We use a WHITELIST approach: only adopt frames that
+-- match the LibDBIcon naming convention (LibDBIcon10_*) or are on a
+-- small known-good list of non-LibDBIcon minimap buttons. This prevents
+-- map-pin addons like HandyNotes from flooding the grid with dozens of
+-- invisible pin frames that happen to be named Button children of
+-- Minimap.
 ---------------------------------------------------------------------------
 
-local BLIZZARD_NAME_BLACKLIST = {
-    ["MinimapBackdrop"]         = true,
-    ["MinimapZoomIn"]           = true,
-    ["MinimapZoomOut"]          = true,
-    ["MiniMapTrackingButton"]   = true,
-    ["MiniMapMailFrame"]        = true,
-    ["MiniMapBattlefieldFrame"] = true,
-    ["MinimapCompassTexture"]   = true,
-    ["MinimapCluster"]          = true,
+-- Non-LibDBIcon minimap buttons from known addons that we should adopt.
+-- Add entries here if a specific addon's minimap button doesn't use
+-- LibDBIcon and needs to appear in the widget.
+local KNOWN_MINIMAP_BUTTONS = {
+    ["BazCoreMinimapButton"]       = true,
+    ["ZygorGuidesViewerMapIcon"]   = true,
 }
 
 local function IsAdoptable(frame)
@@ -75,8 +72,14 @@ local function IsAdoptable(frame)
     if frame:GetParent() ~= Minimap then return false end
     local name = frame:GetName()
     if not name or name == "" then return false end
-    if BLIZZARD_NAME_BLACKLIST[name] then return false end
-    return true
+
+    -- LibDBIcon buttons always match this prefix
+    if name:match("^LibDBIcon10_") then return true end
+
+    -- Known non-LibDBIcon minimap buttons
+    if KNOWN_MINIMAP_BUTTONS[name] then return true end
+
+    return false
 end
 
 ---------------------------------------------------------------------------

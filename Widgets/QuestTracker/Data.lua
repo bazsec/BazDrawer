@@ -88,18 +88,80 @@ function QT.GetQuestData(questID)
         end
     end
 
+    -- Auto-complete flag: quests that can be turned in from anywhere
+    -- without visiting an NPC. When isComplete + isAutoComplete, the
+    -- tracker shows "Click to complete quest" and clicking opens the
+    -- quest completion dialog via ShowQuestComplete(questID).
+    local isAutoComplete = false
+    if questLogIndex then
+        local questInfo = C_QuestLog.GetInfo and C_QuestLog.GetInfo(questLogIndex)
+        if questInfo and questInfo.isAutoComplete then
+            isAutoComplete = true
+        end
+    end
+
+    -- Completion text for non-auto-complete quests (e.g. "Return to
+    -- NPC Name"). Shown instead of objectives when the quest is done.
+    local completionText
+    if isComplete and not isAutoComplete and questLogIndex then
+        if GetQuestLogCompletionText then
+            completionText = GetQuestLogCompletionText(questLogIndex)
+        end
+    end
+
     return {
         kind               = "quest",
         id                 = questID,
         title              = title,
         objectives         = objectives,
         isComplete         = isComplete,
+        isAutoComplete     = isAutoComplete,
+        completionText     = completionText,
         classification     = QT.GetQuestClassification(questID),
         progressBarPct     = progressBarPct,
         questLogIndex      = questLogIndex,
         specialItem        = specialItem,
         specialItemCharges = specialItemCharges,
     }
+end
+
+---------------------------------------------------------------------------
+-- Achievement tracking
+---------------------------------------------------------------------------
+
+---------------------------------------------------------------------------
+-- Bonus objectives (task quests in the current area)
+---------------------------------------------------------------------------
+
+function QT.GetBonusObjectives()
+    local results = {}
+    if not GetTasksTable then return results end
+
+    local tasks = GetTasksTable()
+    for _, questID in ipairs(tasks) do
+        -- Skip world quests and already-tracked quests — those show
+        -- in their own sections. Bonus objectives are area-specific
+        -- tasks that auto-track when you enter the zone.
+        local isWorldQuest = QuestUtils_IsQuestWorldQuest and QuestUtils_IsQuestWorldQuest(questID)
+        local isWatched = QuestUtils_IsQuestWatched and QuestUtils_IsQuestWatched(questID)
+
+        if not isWorldQuest and not isWatched then
+            local isInArea, isOnMap, numObjectives, taskName = GetTaskInfo(questID)
+            if isInArea and numObjectives and numObjectives > 0 then
+                local objectives = C_QuestLog.GetQuestObjectives and C_QuestLog.GetQuestObjectives(questID) or {}
+                local isComplete = C_QuestLog.IsComplete and C_QuestLog.IsComplete(questID) or false
+
+                results[#results + 1] = {
+                    kind       = "quest",
+                    id         = questID,
+                    title      = taskName or "",
+                    objectives = objectives,
+                    isComplete = isComplete,
+                }
+            end
+        end
+    end
+    return results
 end
 
 ---------------------------------------------------------------------------
