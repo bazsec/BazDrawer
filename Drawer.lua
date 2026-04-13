@@ -139,7 +139,7 @@ function Drawer:Build()
 
     display.label = chrome:CreateFontString(nil, "ARTWORK", "GameFontNormalMed3")
     display.label:SetPoint("LEFT", 4, 0)
-    display.label:SetText("BAZDRAWER")
+    display.label:SetText("BAZWIDGETDRAWERS")
 
     -- Lock button — rightmost element in the chrome row. Parented to
     -- `display` (NOT chromeGroup) so its alpha is not affected by the
