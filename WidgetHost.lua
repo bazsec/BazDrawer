@@ -39,6 +39,7 @@ local TITLE_HEIGHT = 20
 local TITLE_CONTENT_GAP = 2
 local DEFAULT_DESIGN_WIDTH = 200
 local DEFAULT_DESIGN_HEIGHT = 60
+local DRAG_HOLD_TIME = 0.5              -- seconds to hold before drag activates
 
 ---------------------------------------------------------------------------
 -- Compute the usable interior width of the host. GetWidth() can return 0
@@ -116,16 +117,67 @@ function WidgetHost:CreateSlot(widget)
     title.status:SetJustifyH("RIGHT")
     title.status:SetText("")
 
-    title:SetScript("OnClick", function()
-        local collapsed = addon:IsWidgetCollapsed(widget.id)
-        addon:SetWidgetCollapsed(widget.id, not collapsed)
-        WidgetHost:Reflow()
+    -- Drag-to-reorder: hold the title bar for DRAG_HOLD_TIME seconds
+    -- to activate drag mode (bar turns green). Then drag to reorder.
+    -- Short clicks still toggle collapse. Only when unlocked.
+    title:RegisterForDrag("LeftButton")
+    title._widgetId = widget.id
+
+    title:SetScript("OnMouseDown", function(self, button)
+        if button ~= "LeftButton" then return end
+        if addon:GetSetting("locked") then return end
+
+        -- Start a hold timer — if held long enough, activate drag mode
+        self._holdPending = true
+        self._holdTimer = C_Timer.NewTimer(DRAG_HOLD_TIME, function()
+            if not self._holdPending then return end
+            self._holdPending = nil
+            self._dragReady = true
+            -- Visual: turn green to indicate drag is active
+            self.bg:SetColorTexture(0.1, 0.4, 0.1, 0.9)
+            WidgetHost:StartDrag(self._widgetId)
+        end)
     end)
+
+    title:SetScript("OnMouseUp", function(self, button)
+        if button ~= "LeftButton" then return end
+
+        if self._holdTimer then
+            self._holdTimer:Cancel()
+            self._holdTimer = nil
+        end
+
+        if self._dragReady then
+            -- Was dragging — stop and restore color
+            self._dragReady = nil
+            self.bg:SetColorTexture(0.15, 0.15, 0.22, 0.9)  -- hovered color (mouse is still over)
+            WidgetHost:StopDrag()
+        elseif self._holdPending then
+            -- Short click — toggle collapse
+            self._holdPending = nil
+            local collapsed = addon:IsWidgetCollapsed(widget.id)
+            addon:SetWidgetCollapsed(widget.id, not collapsed)
+            WidgetHost:Reflow()
+        end
+    end)
+
+    title:SetScript("OnDragStart", function() end)  -- consumed by hold system
+    title:SetScript("OnDragStop", function() end)
+
     title:SetScript("OnEnter", function(self)
-        self.bg:SetColorTexture(0.15, 0.15, 0.22, 0.9)
+        if not self._dragReady then
+            self.bg:SetColorTexture(0.15, 0.15, 0.22, 0.9)
+        end
     end)
     title:SetScript("OnLeave", function(self)
-        self.bg:SetColorTexture(0.08, 0.08, 0.12, 0.7)
+        if self._holdTimer then
+            self._holdTimer:Cancel()
+            self._holdTimer = nil
+            self._holdPending = nil
+        end
+        if not self._dragReady then
+            self.bg:SetColorTexture(0.08, 0.08, 0.12, 0.7)
+        end
     end)
 
     slot.titleBar = title
@@ -417,6 +469,102 @@ function WidgetHost:UpdateWidgetStatus(widgetId)
             end
         end
     end
+end
+
+---------------------------------------------------------------------------
+-- Drag-to-reorder
+--
+-- Title bars act as drag handles when the drawer is unlocked. During a
+-- drag, an OnUpdate handler tracks the cursor Y and swaps widget order
+-- when the cursor crosses into a different slot's territory. Reflow is
+-- called on each swap so the layout updates in real-time.
+---------------------------------------------------------------------------
+
+function WidgetHost:StartDrag(widgetId)
+    if self._dragging then return end
+
+    local slot = self.slots and self.slots[widgetId]
+    if not slot then return end
+
+    self._dragging = widgetId
+
+    -- OnUpdate handler: check cursor position and swap if needed
+    if not self._dragFrame then
+        self._dragFrame = CreateFrame("Frame")
+    end
+    self._dragFrame:SetScript("OnUpdate", function()
+        self:DragUpdate()
+    end)
+end
+
+function WidgetHost:StopDrag()
+    if not self._dragging then return end
+
+    self._dragging = nil
+
+    -- Stop the OnUpdate
+    if self._dragFrame then
+        self._dragFrame:SetScript("OnUpdate", nil)
+    end
+
+    -- Persist the current order
+    local sorted = addon:GetSortedWidgets()
+    for i, w in ipairs(sorted) do
+        addon:SetWidgetOrder(w.id, i)
+    end
+
+    -- Refresh the settings panel widget list if it's open
+    BazCore:RefreshOptions("BazWidgetDrawers-Widgets")
+end
+
+function WidgetHost:DragUpdate()
+    if not self._dragging or not self.parent then return end
+
+    -- Detect mouse release globally — OnMouseUp on the originating
+    -- title bar won't fire if the cursor moved to a different frame.
+    if not IsMouseButtonDown("LeftButton") then
+        -- Find the originating title bar and restore its color
+        local slot = self.slots and self.slots[self._dragging]
+        if slot and slot.titleBar then
+            slot.titleBar._dragReady = nil
+            slot.titleBar.bg:SetColorTexture(0.08, 0.08, 0.12, 0.7)
+        end
+        self:StopDrag()
+        return
+    end
+
+    local _, cursorY = GetCursorPosition()
+    local scale = self.parent:GetEffectiveScale()
+    cursorY = cursorY / scale
+
+    -- Find which slot the cursor is over
+    local targetId = self:GetSlotAtY(cursorY)
+    if not targetId or targetId == self._dragging then return end
+
+    -- Swap the two widgets in the sorted order
+    self:SwapWidgetOrder(self._dragging, targetId)
+end
+
+function WidgetHost:GetSlotAtY(cursorY)
+    if not self.slots then return nil end
+    for id, slot in pairs(self.slots) do
+        if slot:IsShown() then
+            local top = slot:GetTop()
+            local bottom = slot:GetBottom()
+            if top and bottom and cursorY <= top and cursorY >= bottom then
+                return id
+            end
+        end
+    end
+    return nil
+end
+
+function WidgetHost:SwapWidgetOrder(idA, idB)
+    local orderA = addon:GetWidgetOrder(idA) or 10000
+    local orderB = addon:GetWidgetOrder(idB) or 10000
+    addon:SetWidgetOrder(idA, orderB)
+    addon:SetWidgetOrder(idB, orderA)
+    self:Reflow()
 end
 
 ---------------------------------------------------------------------------

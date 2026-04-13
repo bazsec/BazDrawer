@@ -192,6 +192,10 @@ function InfoBarWidget:Init()
         designHeight = DESIGN_HEIGHT,
         frame        = wrapper,
         OnDock       = function() AttachFrames() end,
+        GetStatusText = function()
+            local h, m = GetGameTime()
+            return string.format("%d:%02d", h, m), 0.8, 0.8, 0.8
+        end,
     }
 
     BazCore:RegisterDockableWidget(widgetInfo)

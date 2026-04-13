@@ -30,7 +30,7 @@ addon = BazCore:RegisterAddon(ADDON_NAME, {
 
         -- Fading
         fadeEnabled         = true,
-        fadedOpacity        = 0.3,   -- target alpha when faded out
+        fadedOpacity        = 0,     -- target alpha when faded out
         fadeDelay           = 1.0,   -- seconds to wait after mouse leaves before starting fade
         fadeDuration        = 0.3,   -- fade animation duration in seconds
         edgeRevealPx        = 8,     -- cursor proximity to active screen edge to reveal tab
@@ -43,7 +43,7 @@ addon = BazCore:RegisterAddon(ADDON_NAME, {
         locked = false,
     },
 
-    slash = { "/bwd", "/bd" },
+    slash = { "/bwd" },
     commands = {
         toggle = {
             desc = "Toggle the drawer open/closed",

@@ -137,7 +137,7 @@ function Drawer:Build()
     chrome:SetHeight(30)
     display.chromeGroup = chrome
 
-    display.label = chrome:CreateFontString(nil, "ARTWORK", "GameFontNormalMed3")
+    display.label = chrome:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     display.label:SetPoint("LEFT", 4, 0)
     display.label:SetText("BAZWIDGETDRAWERS")
 
@@ -337,7 +337,7 @@ end
 local LOCK_ATLAS_LOCKED   = "activities-icon-lock"
 local LOCK_ATLAS_UNLOCKED = "QuestSharing-Padlock"
 
-function Drawer:ApplyLockUI()
+function Drawer:ApplyLockUI(skipFade)
     local f = self.frame; if not f then return end
     local display = f.displayFrame; if not display then return end
 
@@ -358,10 +358,25 @@ function Drawer:ApplyLockUI()
     if display.countLabel then display.countLabel:SetShown(showChrome) end
     if display.infoButton then display.infoButton:SetShown(showChrome) end
 
-    -- Lock icon is only ever visible while the cursor is over the
-    -- drawer. Regardless of lock state: no hover → no lock icon.
+    -- Lock icon fades in/out using the same duration as the drawer
+    -- chrome instead of snapping instantly. When called from
+    -- EvaluateFade with skipFade=true, the fade is deferred to
+    -- Apply() so it goes through the same delay path as chrome.
     if lb then
-        lb:SetShown(hovered)
+        lb:SetShown(true)
+        if not skipFade then
+            local targetAlpha = hovered and 1 or 0
+            local currentAlpha = lb:GetAlpha()
+            if math.abs(currentAlpha - targetAlpha) > 0.01 then
+                local duration = addon:GetSetting("fadeDuration") or 0.3
+                UIFrameFade(lb, {
+                    mode = targetAlpha > currentAlpha and "IN" or "OUT",
+                    timeToFade = duration,
+                    startAlpha = currentAlpha,
+                    endAlpha = targetAlpha,
+                })
+            end
+        end
     end
 end
 
@@ -617,9 +632,9 @@ end
 function Drawer:EvaluateFade(force)
     local f = self.frame; if not f then return end
 
-    -- Refresh the lock UI's hover-driven visibility on every evaluation
-    -- so the lock icon appears/disappears in sync with the fade system.
-    self:ApplyLockUI()
+    -- Refresh the lock icon atlas and chrome visibility (but NOT the
+    -- lock fade — that's handled inside Apply so it shares the delay).
+    self:ApplyLockUI(true)
 
     local bgTarget, borderTarget, tabTarget = self:ComputeFadeTargets()
     -- The title-bar chrome (label + count + info) uses the same target
@@ -666,6 +681,22 @@ function Drawer:EvaluateFade(force)
                 endAlpha = chromeTarget,
             })
             state.chrome = chromeTarget
+        end
+
+        -- Lock button — fade in sync with chrome (same duration)
+        local lb = f.displayFrame and f.displayFrame.lockButton
+        if lb then
+            local hovered = f:IsMouseOver() or (f.toggleButton and f.toggleButton:IsMouseOver())
+            local lockTarget = hovered and 1 or 0
+            local lockCurrent = lb:GetAlpha()
+            if math.abs(lockCurrent - lockTarget) > 0.01 then
+                UIFrameFade(lb, {
+                    mode = lockTarget > lockCurrent and "IN" or "OUT",
+                    timeToFade = duration,
+                    startAlpha = lockCurrent,
+                    endAlpha = lockTarget,
+                })
+            end
         end
 
         -- Widget slot title bars and backgrounds (per-widget settings,
