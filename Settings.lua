@@ -493,20 +493,8 @@ local function BuildDrawerGroup(drawerDef, drawerId, index, total)
             type = "execute",
             name = "|T" .. (drawerDef.icon or "Interface\\Icons\\INV_Misc_QuestionMark") .. ":32:32|t",
             width = "half",
-            func = function()
-                -- Same as Choose Icon
-                BazCore:ShowIconPicker(function(iconId)
-                    local drawers = addon:GetSetting("drawers") or {}
-                    if drawers[drawerId] then
-                        drawers[drawerId].icon = iconId
-                        addon:SetSetting("drawers", drawers)
-                        if addon.Drawer and addon.Drawer.RefreshTabs then
-                            addon.Drawer:RefreshTabs()
-                        end
-                        BazCore:RefreshOptions("BazWidgetDrawers-Drawers")
-                    end
-                end, drawerDef.icon)
-            end,
+            borderless = true,
+            func = function() end,  -- not clickable; Choose Icon button handles changes
         },
 
         autoHeader = { order = 10, type = "header", name = "Auto-Switch" },
@@ -575,7 +563,9 @@ local function BuildDrawerGroup(drawerDef, drawerId, index, total)
                 else
                     addon:RemoveWidgetFromDrawer(drawerId, wid)
                 end
-                BazCore:RefreshOptions("BazWidgetDrawers-Drawers")
+                -- No RefreshOptions here: the checkbox visual updates
+                -- natively, and the drawer reflows via AddWidgetToDrawer.
+                -- Avoiding the rebuild preserves scroll position.
             end,
         }
         widgetOrder = widgetOrder + 1
