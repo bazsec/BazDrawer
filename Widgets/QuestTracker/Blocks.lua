@@ -364,13 +364,17 @@ function QT.PopulateBlock(block, quest)
         end
     end
 
-    -- Find Group ("green eye") button — only for WQs that LFG can
-    -- create a group for (returns non-nil activityID).
+    -- Find Group ("green eye") button — same condition Blizzard's own
+    -- BonusObjectiveTracker uses: QuestUtil.CanCreateQuestGroup(questID).
+    -- This is a stricter check than just GetActivityIDForQuestID — it
+    -- also factors in whether the quest is actually meant for grouping
+    -- (elite WQs, group quests, etc.) rather than every WQ that
+    -- happens to have an LFG activity definition.
     if block.findGroupBtn then
         local showFindGroup = false
-        if isWorldQuest and quest.id and C_LFGList and C_LFGList.GetActivityIDForQuestID then
-            local ok, activityID = pcall(C_LFGList.GetActivityIDForQuestID, quest.id)
-            if ok and activityID then showFindGroup = true end
+        if isWorldQuest and quest.id and QuestUtil and QuestUtil.CanCreateQuestGroup then
+            local ok, can = pcall(QuestUtil.CanCreateQuestGroup, quest.id)
+            if ok and can then showFindGroup = true end
         end
         if showFindGroup then
             if block.findGroupBtn.SetUp then
@@ -549,7 +553,7 @@ function QT.PopulateBlock(block, quest)
     if block.progressBar then
         if quest.progressBarPct and not isScenario then
             local barH = 13
-            local barPad = 8  -- breathing room above and below the bar
+            local barPad = 16  -- breathing room above and below the bar
             block.progressBar:ClearAllPoints()
             block.progressBar:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT",
                 C.OBJ_INDENT, -(objTotalH + C.OBJ_LINE_GAP + barPad))
