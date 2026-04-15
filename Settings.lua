@@ -871,11 +871,11 @@ BazCore:QueueForLogin(function()
 
     -- Settings subcategory
     BazCore:RegisterOptionsTable("BazWidgetDrawers-Settings", GetSettingsOptionsTable)
-    BazCore:AddToSettings("BazWidgetDrawers-Settings", "Settings", "BazWidgetDrawers")
+    BazCore:AddToSettings("BazWidgetDrawers-Settings", "General Settings", "BazWidgetDrawers")
 
     -- Global Options subcategory (per-key overrides across all widgets)
     BazCore:RegisterOptionsTable("BazWidgetDrawers-GlobalOptions", GetGlobalOptionsTable)
-    BazCore:AddToSettings("BazWidgetDrawers-GlobalOptions", "Global Options", "BazWidgetDrawers")
+    BazCore:AddToSettings("BazWidgetDrawers-GlobalOptions", "Global Settings", "BazWidgetDrawers")
 
     -- Drawers subcategory (create/manage drawer tabs)
     BazCore:RegisterOptionsTable("BazWidgetDrawers-Drawers", GetDrawersOptionsTable)
