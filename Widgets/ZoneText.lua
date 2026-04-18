@@ -88,8 +88,9 @@ function ZoneWidget:GetOptionsArgs()
         },
         appearanceNote = {
             order = 11,
-            type = "description",
-            name = "The zone name is colored automatically based on the area's PVP status (gold in neutral zones, green in friendly, red in hostile, orange in contested, light blue in sanctuary).",
+            type = "note",
+            style = "info",
+            text = "The zone name is colored automatically based on the area's PVP status (gold in neutral zones, green in friendly, red in hostile, orange in contested, light blue in sanctuary).",
         },
     }
 end

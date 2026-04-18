@@ -52,20 +52,8 @@ local function GetSettingsOptionsTable()
                     if addon.Drawer then addon.Drawer:SetWidth(val) end
                 end,
             },
-            behaviorHeader = {
-                order = 10,
-                type = "header",
-                name = "Behavior",
-            },
-            toggle = {
-                order = 11,
-                type = "execute",
-                name = "Toggle Drawer",
-                desc = "Open or close the drawer now.",
-                func = function()
-                    if addon.Drawer then addon.Drawer:Toggle() end
-                end,
-            },
+            -- "Behavior" section dropped — "Toggle Drawer" wasn't a
+            -- setting but a one-shot action, available via /bwd toggle.
 
             appearanceHeader = {
                 order = 20,
@@ -188,11 +176,11 @@ local function GetSettingsOptionsTable()
                 end,
                 disabled = function() return addon:GetSetting("locked") and true or false end,
             },
-            disableFadeInCombat = {
+            alwaysShowInCombat = {
                 order = 37,
                 type = "toggle",
-                name = "Disable Fade In Combat",
-                desc = "Force full opacity whenever you're in combat, ignoring fade settings.",
+                name = "Always Show In Combat",
+                desc = "Force the drawer to full opacity whenever you're in combat, ignoring fade settings.",
                 get = function() return addon:GetSetting("disableFadeInCombat") and true or false end,
                 set = function(_, val)
                     addon:SetSetting("disableFadeInCombat", val)
@@ -260,29 +248,31 @@ end
 local function BuildWidgetGroup(widget, index, total)
     local id = widget.id
     local args = {
-        moveUp = {
-            order = 0.1,
-            type = "execute",
-            name = "Move Up",
-            func = function()
-                MoveWidgetInFullList(id, -1)
-                BazCore:RefreshOptions("BazWidgetDrawers-Widgets")
+        enabled = {
+            order = 0.05,
+            type = "toggle",
+            name = "Enabled",
+            desc = "Turn this widget on or off entirely. A disabled widget is hidden everywhere — not docked in any drawer, not floating, and any side-effects (e.g. durability-frame override for Repair) are restored to defaults.",
+            get = function() return addon:IsWidgetEnabled(id) end,
+            set = function(_, val)
+                if addon.WidgetHost and addon.WidgetHost.SetWidgetEnabled then
+                    addon.WidgetHost:SetWidgetEnabled(id, val)
+                else
+                    addon:SetWidgetEnabled(id, val)
+                end
             end,
-            disabled = function() return index <= 1 end,
-            width = "half",
         },
-        moveDown = {
-            order = 0.2,
-            type = "execute",
-            name = "Move Down",
-            func = function()
-                MoveWidgetInFullList(id, 1)
-                BazCore:RefreshOptions("BazWidgetDrawers-Widgets")
-            end,
-            disabled = function() return index >= total end,
-            width = "half",
+        enabledNote = {
+            order = 0.06,
+            type = "note",
+            style = "info",
+            text = "Disabling a widget hides it everywhere — no drawer slot, no floating frame. Any side-effects (like the Repair widget's durability-frame override) are also restored to Blizzard defaults.",
         },
-        displayHeader = { order = 1, type = "header", name = "Display" },
+        -- Move Up/Down buttons removed — ordering is handled by
+        -- drag-to-reorder on the widget's title bar inside the drawer
+        -- (hold half a second → drag). Having the buttons here was
+        -- misleading since the order is global, not per-drawer.
+        dockingHeader = { order = 1, type = "header", name = "Docking" },
         floating = {
             order = 2,
             type = "toggle",
@@ -346,15 +336,26 @@ local function BuildWidgetGroup(widget, index, total)
 
     }
 
-    -- Widgets can supply their own options via widget:GetOptionsArgs()
+    -- Widgets can supply their own options via widget:GetOptionsArgs().
+    -- Their internal order values (often 1..N) would collide with the
+    -- top-level Docking/Fading order slots, so we shift them all into
+    -- the 20+ range — preserving the widget's own relative ordering
+    -- while guaranteeing they sit after the "Widget Settings" header.
     if widget.GetOptionsArgs then
         local ok, extra = pcall(widget.GetOptionsArgs, widget)
-        if ok and type(extra) == "table" then
-            local nextOrder = 20
+        if ok and type(extra) == "table" and next(extra) then
+            args.widgetSettingsHeader = {
+                order = 19,
+                type = "header",
+                name = "Widget Settings",
+            }
+            local BASE = 20
             for key, opt in pairs(extra) do
                 if type(opt) == "table" then
-                    opt.order = opt.order or nextOrder
-                    nextOrder = nextOrder + 1
+                    -- Add BASE so ordering becomes 20+, 21, 22, ...
+                    -- (preserves widget-internal order but always
+                    -- sits below our section headers).
+                    opt.order = (opt.order or 0) + BASE
                     args[key] = opt
                 end
             end
@@ -380,8 +381,43 @@ local function BuildWidgetGroup(widget, index, total)
     }
 end
 
+-- Returns EVERY registered widget (dockable + dormant), regardless of
+-- which drawer they're in. Used by the Widgets settings page so the
+-- user can configure any widget's per-widget settings even if it's
+-- not currently docked in their active drawer.
+local function GetAllRegisteredWidgets()
+    local result = {}
+    local seen = {}
+
+    local dockable = BazCore.GetDockableWidgets and BazCore:GetDockableWidgets() or {}
+    for _, w in ipairs(dockable) do
+        result[#result + 1] = w
+        seen[w.id] = true
+    end
+
+    local LBW = LibStub and LibStub("LibBazWidget-1.0", true)
+    if LBW and LBW.dormant then
+        for id, entry in pairs(LBW.dormant) do
+            if not seen[id] and entry.widget then
+                result[#result + 1] = entry.widget
+                seen[id] = true
+            end
+        end
+    end
+
+    -- Sort by user's saved widget order, falling back to ID for ties
+    table.sort(result, function(a, b)
+        local oa = addon:GetWidgetOrder(a.id) or 10000
+        local ob = addon:GetWidgetOrder(b.id) or 10000
+        if oa == ob then return (a.id or "") < (b.id or "") end
+        return oa < ob
+    end)
+
+    return result
+end
+
 local function GetWidgetsOptionsTable()
-    local sorted = GetAllWidgetsSorted()
+    local sorted = GetAllRegisteredWidgets()
 
     local widgetArgs = {}
     for i, widget in ipairs(sorted) do
@@ -392,6 +428,11 @@ local function GetWidgetsOptionsTable()
         name = "Widgets",
         type = "group",
         args = {
+            intro = {
+                order = -1,
+                type = "lead",
+                text = "Per-widget settings for every widget currently registered with BazWidgetDrawers. Use the Enabled toggle to turn a widget off entirely; use the Drawers page to choose which drawer(s) each widget appears in.",
+            },
             widgets = {
                 order = 1,
                 type = "group",
@@ -407,7 +448,7 @@ end
 ---------------------------------------------------------------------------
 
 local function GetGlobalOptionsTable()
-    return BazCore:CreateGlobalOptionsPage("BazWidgetDrawers", {
+    local page = BazCore:CreateGlobalOptionsPage("BazWidgetDrawers", {
         getOverrides = function() return addon:GetGlobalOverrides() end,
         setOverride = function(key, field, value)
             addon:SetGlobalOverride(key, field, value)
@@ -417,6 +458,23 @@ local function GetGlobalOptionsTable()
             { key = "fadeBackground", label = "Fade Background",  type = "toggle", default = true },
         },
     })
+
+    -- Prepend a lead + note explaining how overrides cascade. The builder
+    -- already includes its own boilerplate description; we slot our lead
+    -- in above it so the page has a clear intro.
+    page.args = page.args or {}
+    page.args.intro = {
+        order = -1,
+        type = "lead",
+        text = "Overrides set here apply to every widget at once, regardless of each widget's individual setting.",
+    }
+    page.args.introNote = {
+        order = -0.5,
+        type = "note",
+        style = "info",
+        text = "Enable a specific override to force its value across all widgets. Disable the override to return each widget to its own per-widget setting.",
+    }
+    return page
 end
 
 ---------------------------------------------------------------------------
@@ -471,6 +529,11 @@ local function BuildDrawerGroup(drawerDef, drawerId, index, total)
     end
 
     local args = {
+        identityHeader = {
+            order = 0,
+            type = "header",
+            name = "Identity",
+        },
         labelInput = {
             order = 1,
             type = "input",
@@ -487,8 +550,8 @@ local function BuildDrawerGroup(drawerDef, drawerId, index, total)
         },
         labelSpacer = {
             order = 1.5,
-            type = "description",
-            name = " ",
+            type = "spacer",
+            height = 8,
         },
         chooseIcon = {
             order = 2,
@@ -563,8 +626,9 @@ local function BuildDrawerGroup(drawerDef, drawerId, index, total)
         widgetHeader = { order = 20, type = "header", name = "Widgets" },
         widgetDesc = {
             order = 21,
-            type = "description",
-            name = "Check which widgets appear in this drawer. A widget can be in multiple drawers.",
+            type = "note",
+            style = "info",
+            text = "Check which widgets appear in this drawer. A widget can be in multiple drawers.",
         },
     }
 
@@ -627,7 +691,13 @@ local function BuildDrawerGroup(drawerDef, drawerId, index, total)
     local drawers = addon:GetSetting("drawers") or {}
     for _ in pairs(drawers) do drawerCount = drawerCount + 1 end
 
-    args.deleteHeader = { order = 100, type = "header", name = "" }
+    args.deleteHeader = { order = 100, type = "header", name = "Delete" }
+    args.deleteNote = {
+        order = 100.5,
+        type = "note",
+        style = "danger",
+        text = "Permanently removes this drawer tab. The widgets it contained are unaffected — they stay registered and can be assigned to other drawers.",
+    }
     args.deleteDrawer = {
         order = 101,
         type = "execute",
@@ -662,6 +732,11 @@ local function GetDrawersOptionsTable()
         name = "Drawers",
         type = "group",
         args = {
+            intro = {
+                order = -1,
+                type = "lead",
+                text = "Each drawer is its own preset of widgets, width, fade, and layout. Run multiple drawers for different game modes (questing / M+ / PvP) and switch between them via the tabs at the top of the drawer.",
+            },
             createDrawer = {
                 order = 0,
                 type = "execute",
@@ -884,8 +959,8 @@ BazCore:QueueForLogin(function()
     -- Widgets subcategory (list/detail - same shape as BazBars' Bar Options)
     BazCore:RegisterOptionsTable("BazWidgetDrawers-Widgets", GetWidgetsOptionsTable)
     BazCore:AddToSettings("BazWidgetDrawers-Widgets", "Widgets", "BazWidgetDrawers")
-
-    -- Enable/Disable subcategory (flat enable/disable toggles)
-    BazCore:RegisterOptionsTable("BazWidgetDrawers-Modules", GetModulesOptionsTable)
-    BazCore:AddToSettings("BazWidgetDrawers-Modules", "Enable/Disable", "BazWidgetDrawers")
+    -- Enable/Disable sub-category merged into the Widgets page — each
+    -- widget's detail panel now has an "Enabled" toggle at the top.
+    -- GetModulesOptionsTable is still defined but no longer exposed
+    -- as a separate sidebar entry.
 end)

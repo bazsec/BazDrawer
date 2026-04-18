@@ -534,18 +534,66 @@ function WidgetHost:DragUpdate()
         return
     end
 
+    -- Swap cooldown: don't swap more than ~6 times per second. Without
+    -- this, mouse jitter at slot boundaries produces rapid back-and-forth
+    -- swaps that feel janky.
+    local now = GetTime()
+    if self._lastSwapTime and (now - self._lastSwapTime) < 0.15 then
+        return
+    end
+
     local _, cursorY = GetCursorPosition()
     local scale = self.parent:GetEffectiveScale()
     cursorY = cursorY / scale
 
-    -- Find which slot the cursor is over
-    local targetId = self:GetSlotAtY(cursorY)
+    -- Find the slot whose CENTER the cursor has crossed past (not just
+    -- "any slot the cursor is inside"). This gives a natural hysteresis
+    -- — a small mouse jitter at a slot boundary can't flip the swap
+    -- back-and-forth because the cursor has to physically move past
+    -- the target's midline.
+    local targetId = self:GetSlotPastMidpoint(cursorY)
     if not targetId or targetId == self._dragging then return end
 
-    -- Swap the two widgets in the sorted order
+    self._lastSwapTime = now
     self:SwapWidgetOrder(self._dragging, targetId)
 end
 
+-- Returns the slot whose midpoint the cursor has passed toward (relative
+-- to the currently-dragged slot). The cursor must be on the side of the
+-- target's midpoint that's "away from" the dragged slot before we call
+-- it a crossing. Works for both upward and downward drags.
+function WidgetHost:GetSlotPastMidpoint(cursorY)
+    if not self.slots then return nil end
+
+    local draggedSlot = self.slots[self._dragging]
+    if not draggedSlot then return nil end
+    local draggedMid
+    local dTop, dBot = draggedSlot:GetTop(), draggedSlot:GetBottom()
+    if dTop and dBot then draggedMid = (dTop + dBot) * 0.5 end
+    if not draggedMid then return nil end
+
+    for id, slot in pairs(self.slots) do
+        if id ~= self._dragging and slot:IsShown() then
+            local top, bottom = slot:GetTop(), slot:GetBottom()
+            if top and bottom then
+                local mid = (top + bottom) * 0.5
+                -- Dragging DOWN into a lower slot — cursor must be
+                -- below that slot's midpoint
+                if mid < draggedMid and cursorY <= mid then
+                    return id
+                end
+                -- Dragging UP into a higher slot — cursor must be
+                -- above that slot's midpoint
+                if mid > draggedMid and cursorY >= mid then
+                    return id
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- Legacy helper kept for back-compat (unused by the new drag logic)
 function WidgetHost:GetSlotAtY(cursorY)
     if not self.slots then return nil end
     for id, slot in pairs(self.slots) do

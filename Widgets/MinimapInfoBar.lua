@@ -1,9 +1,10 @@
 -- BazWidgetDrawers Widget: Minimap Info Bar
 --
 -- Horizontal bar that combines the Blizzard clock button, the
--- calendar/game-time button, and the minimap tracking button.
--- Zone text lives in its own Zone widget now. Left side is
--- intentionally empty for future info buttons (bag count, mail, etc.).
+-- calendar/game-time button, the minimap tracking button, and a
+-- mail indicator on the left that only appears when you have
+-- unread mail. More left-side info buttons (bag count, gold,
+-- fps/ms, etc.) can be added over time.
 
 local addon = BazCore:GetAddon("BazWidgetDrawers")
 if not addon then return end
@@ -130,9 +131,25 @@ local function AttachFrames()
     C_Timer.NewTicker(60, RefreshCalendar)
     RefreshCalendar()
 
-    -- Clock button just to the left of the calendar (or tracking, if
-    -- calendar isn't available). TimeManagerClockButton is load-on-demand;
-    -- force-load its owning addon if it hasn't loaded yet and retry.
+    -- Small pocket-watch icon flush to the left edge of the bar; the
+    -- clock text anchors to its right. Visually pairs the icon + time
+    -- so the user reads them as one element rather than a floating
+    -- number.
+    local clockIconSize = DESIGN_HEIGHT - 8
+    local clockIcon = wrapper:CreateTexture(nil, "ARTWORK")
+    clockIcon:SetSize(clockIconSize, clockIconSize)
+    clockIcon:SetPoint("LEFT", wrapper, "LEFT", PAD, 0)
+    clockIcon:SetTexture("Interface\\Icons\\INV_Misc_PocketWatch_01")
+    -- Round the icon with a circle mask so it doesn't show the square
+    -- icon border next to the other minimap-button-style icons.
+    local mask = wrapper:CreateMaskTexture()
+    mask:SetAllPoints(clockIcon)
+    mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask",
+                    "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    clockIcon:AddMaskTexture(mask)
+
+    -- Clock button. TimeManagerClockButton is load-on-demand; force-load
+    -- its owning addon if it hasn't loaded yet and retry.
     local function AttachClock()
         local clock = TimeManagerClockButton
         if not clock then
@@ -159,18 +176,114 @@ local function AttachFrames()
         -- zone text. Small negative y nudge drops its baseline back
         -- in line with the zone text visually.
         local CLOCK_Y_OFFSET = -1
-        local anchorTarget = calendarBtn or trackingBtn
-        if anchorTarget then
-            -- Keep the clock-to-calendar gap tight to match the
-            -- calendar-to-tracking gap — the whole right cluster reads
-            -- as one unit instead of three spaced-out icons.
-            clock:SetPoint("RIGHT", anchorTarget, "LEFT", -1, CLOCK_Y_OFFSET)
-        else
-            clock:SetPoint("RIGHT", wrapper, "RIGHT", -PAD, CLOCK_Y_OFFSET)
-        end
+        -- Anchor clock to the right of the pocket-watch icon. Negative
+        -- x offset compensates for the clock button's own internal left
+        -- padding (it's a compound frame with centered text inside a
+        -- wider box; at 1.25 scale the padding is chunky). Dialed so
+        -- the visible "H:MM" sits snug against the icon.
+        local CLOCK_X_OFFSET = -2
+        clock:SetPoint("LEFT", clockIcon, "RIGHT", CLOCK_X_OFFSET, CLOCK_Y_OFFSET)
         clock:Show()
     end
     AttachClock()
+
+    -- Mail indicator on the RIGHT side of the bar, snug against the
+    -- calendar button. Always visible: subdued (dim icon) when there's
+    -- no new mail, brightened and pulsing when new mail arrives.
+    local mailBtn = CreateFrame("Button", nil, wrapper)
+    mailBtn:SetSize(iconSize, iconSize)
+    if calendarBtn then
+        mailBtn:SetPoint("RIGHT", calendarBtn, "LEFT", -1, 0)
+    elseif trackingBtn then
+        mailBtn:SetPoint("RIGHT", trackingBtn, "LEFT", -1, 0)
+    else
+        mailBtn:SetPoint("RIGHT", wrapper, "RIGHT", -PAD, 0)
+    end
+
+    -- Same shared button chrome as calendar/tracking
+    mailBtn.bg = mailBtn:CreateTexture(nil, "BACKGROUND")
+    mailBtn.bg:SetAllPoints()
+    mailBtn.bg:SetAtlas("ui-hud-minimap-button", false)
+
+    -- Native mail icon — tracking atlas gives us a clean mailbox glyph
+    mailBtn.icon = mailBtn:CreateTexture(nil, "ARTWORK")
+    mailBtn.icon:SetPoint("CENTER", 0, 0)
+    mailBtn.icon:SetSize(math.floor(iconSize * 0.70), math.floor(iconSize * 0.70))
+    mailBtn.icon:SetTexture("Interface\\Minimap\\Tracking\\Mailbox")
+
+    -- Subtle pulse when new mail comes in — AnimationGroup looping a
+    -- short alpha in/out on a tint texture overlay.
+    mailBtn.pulse = mailBtn:CreateTexture(nil, "OVERLAY")
+    mailBtn.pulse:SetAllPoints()
+    mailBtn.pulse:SetAtlas("ui-hud-minimap-button", false)
+    mailBtn.pulse:SetVertexColor(1.0, 0.85, 0.3, 0)
+    mailBtn.pulse:SetBlendMode("ADD")
+    mailBtn.pulseAnim = mailBtn:CreateAnimationGroup()
+    mailBtn.pulseAnim:SetLooping("BOUNCE")
+    local pulseIn = mailBtn.pulseAnim:CreateAnimation("Alpha")
+    pulseIn:SetTarget(mailBtn.pulse)
+    pulseIn:SetFromAlpha(0)
+    pulseIn:SetToAlpha(0.6)
+    pulseIn:SetDuration(0.6)
+    pulseIn:SetSmoothing("IN_OUT")
+
+    mailBtn:SetScript("OnClick", function()
+        -- Best-effort — no-op if not near a mailbox
+        if ToggleMailFrame then ToggleMailFrame() end
+    end)
+    mailBtn:SetScript("OnEnter", function(self)
+        local has = HasNewMail and HasNewMail() or false
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        if has then
+            GameTooltip:SetText(HAVE_MAIL or "You have unread mail")
+            if GetLatestThreeSenders then
+                local s1, s2, s3 = GetLatestThreeSenders()
+                local senders = {}
+                if s1 then senders[#senders + 1] = s1 end
+                if s2 then senders[#senders + 1] = s2 end
+                if s3 then senders[#senders + 1] = s3 end
+                if #senders > 0 then
+                    GameTooltip:AddLine("From: " .. table.concat(senders, ", "), 1, 1, 1, true)
+                end
+            end
+        else
+            GameTooltip:SetText("Mailbox")
+            GameTooltip:AddLine("No new mail.", 1, 1, 1, true)
+        end
+        GameTooltip:Show()
+    end)
+    mailBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    local function RefreshMail()
+        local has = HasNewMail and HasNewMail() or false
+        if has then
+            -- Bright icon + gentle pulse
+            mailBtn.icon:SetAlpha(1.0)
+            mailBtn.icon:SetVertexColor(1, 1, 1)
+            mailBtn.bg:SetAlpha(1.0)
+            if not mailBtn.pulseAnim:IsPlaying() then
+                mailBtn.pulseAnim:Play()
+            end
+        else
+            -- Subdued: dim icon + no pulse + slightly darkened chrome
+            mailBtn.icon:SetAlpha(0.35)
+            mailBtn.icon:SetVertexColor(0.7, 0.7, 0.7)
+            mailBtn.bg:SetAlpha(0.55)
+            if mailBtn.pulseAnim:IsPlaying() then
+                mailBtn.pulseAnim:Stop()
+                mailBtn.pulse:SetAlpha(0)
+            end
+        end
+    end
+
+    local mailEvents = CreateFrame("Frame", nil, mailBtn)
+    mailEvents:RegisterEvent("UPDATE_PENDING_MAIL")
+    mailEvents:RegisterEvent("MAIL_INBOX_UPDATE")
+    mailEvents:RegisterEvent("MAIL_SHOW")
+    mailEvents:RegisterEvent("MAIL_CLOSED")
+    mailEvents:RegisterEvent("PLAYER_ENTERING_WORLD")
+    mailEvents:SetScript("OnEvent", RefreshMail)
+    RefreshMail()
 
     isAttached = true
 end

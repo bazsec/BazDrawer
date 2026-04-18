@@ -463,8 +463,9 @@ function MinimapButtonsWidget:GetOptionsArgs()
         },
         orderDescription = {
             order = 21,
-            type = "description",
-            name = "Reorder the buttons in the grid. Buttons appear left-to-right, top-to-bottom in the order listed below. New buttons detected by Re-scan are appended to the end.",
+            type = "note",
+            style = "info",
+            text = "Reorder the buttons in the grid. Buttons appear left-to-right, top-to-bottom in the order listed below. New buttons detected by Re-scan are appended to the end.",
         },
     }
 
@@ -481,8 +482,8 @@ function MinimapButtonsWidget:GetOptionsArgs()
 
         args["btn_" .. i .. "_label"] = {
             order = baseOrder + (i - 1) * 10 + 0,
-            type = "description",
-            name = "|cffffd700" .. label .. "|r",
+            type = "paragraph",
+            text = "|cffffd700" .. label .. "|r",
         }
         args["btn_" .. i .. "_up"] = {
             order = baseOrder + (i - 1) * 10 + 1,
@@ -517,8 +518,9 @@ function MinimapButtonsWidget:GetOptionsArgs()
     if total == 0 then
         args.orderEmpty = {
             order = 29,
-            type = "description",
-            name = "|cff888888No adopted buttons yet. Load an addon that adds a minimap button, then run Re-scan.|r",
+            type = "note",
+            style = "info",
+            text = "No adopted buttons yet. Load an addon that adds a minimap button, then run Re-scan.",
         }
     end
 
