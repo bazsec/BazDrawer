@@ -1,8 +1,8 @@
-## Interface: 120001
+## Interface: 120005
 ## Title: BazWidgetDrawers
 ## Notes: Slide-out side drawer that hosts docked Baz Suite widgets
 ## Author: Baz4k
-## Version: 028
+## Version: 029
 ## X-License: GPL v2
 ## Category: Baz Suite
 ## X-Category: Interface Enhancements
