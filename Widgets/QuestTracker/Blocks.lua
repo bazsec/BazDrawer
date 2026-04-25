@@ -109,8 +109,22 @@ function QT.CreateBlock()
             if C_SuperTrack and C_SuperTrack.SetSuperTrackedQuestID then
                 C_SuperTrack.SetSuperTrackedQuestID(block._questID)
             end
-            if WorldMapFrame and not WorldMapFrame:IsShown() and ToggleWorldMap then
-                ToggleWorldMap()
+            -- Open the World Map's quest log side panel and show this
+            -- quest's details — Blizzard's default tracker behaviour.
+            --
+            -- We deliberately avoid QuestMapFrame_OpenToQuestDetails
+            -- because it goes through ToggleWorldMap → ShowUIPanel,
+            -- which can fail when BazMap disables UIPanelLayout on
+            -- WorldMapFrame (lets the map be freely positioned). Show
+            -- the frame directly and switch modes ourselves so the
+            -- behaviour is identical with or without BazMap.
+            if WorldMapFrame and not WorldMapFrame:IsShown() then
+                WorldMapFrame:Show()
+            end
+            if QuestMapFrame_ShowQuestDetails then
+                QuestMapFrame_ShowQuestDetails(block._questID)
+            elseif QuestMapFrame_OpenToQuestDetails then
+                QuestMapFrame_OpenToQuestDetails(block._questID)
             end
         elseif button == "RightButton" then
             if C_QuestLog.RemoveQuestWatch then
