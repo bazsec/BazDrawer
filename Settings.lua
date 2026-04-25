@@ -242,6 +242,37 @@ local function MoveWidgetInFullList(id, direction)
 end
 
 ---------------------------------------------------------------------------
+---------------------------------------------------------------------------
+-- Compose a widget's display label with status + tag badges
+--
+-- Returns "<label>  [D]  [LDB]  ..." where:
+--   - [D] (green) — dormant widget that is currently sleeping
+--   - widget.tags (any) — static badges set at registration time, each
+--     of the form { text = "X", color = "rrggbb" }. Lets addons like
+--     BazBrokerWidget mark every widget they provide so the user knows
+--     where it came from at a glance.
+---------------------------------------------------------------------------
+local function WidgetDisplayName(id, widget)
+    local name = widget and widget.label or id
+
+    local LBW = LibStub and LibStub("LibBazWidget-1.0", true)
+    if LBW and LBW.dormant and LBW.dormant[id] then
+        if not LBW:IsDormantWidgetActive(id) then
+            name = name .. "  |cff60ff60[D]|r"
+        end
+    end
+
+    if widget and widget.tags then
+        for _, tag in ipairs(widget.tags) do
+            local color = tag.color or "ffffff"
+            local text  = tag.text  or "?"
+            name = name .. "  |cff" .. color .. "[" .. text .. "]|r"
+        end
+    end
+
+    return name
+end
+
 -- Per-widget options group (built dynamically per widget)
 ---------------------------------------------------------------------------
 
@@ -362,15 +393,7 @@ local function BuildWidgetGroup(widget, index, total)
         end
     end
 
-    -- Dormant indicator: tag shows whether a dormant widget is
-    -- currently active or sleeping (list panel overrides inline colors)
-    local LBW = LibStub and LibStub("LibBazWidget-1.0", true)
-    local isDormant = LBW and LBW.dormant and LBW.dormant[id]
-    local displayName = widget.label or id
-    if isDormant then
-        local isActive = LBW:IsDormantWidgetActive(id)
-        displayName = displayName .. (isActive and "" or "  |cff60ff60[D]|r")
-    end
+    local displayName = WidgetDisplayName(id, widget)
 
     return {
         order = index,
@@ -639,7 +662,7 @@ local function BuildDrawerGroup(drawerDef, drawerId, index, total)
         args["widget_" .. wid] = {
             order = widgetOrder,
             type = "toggle",
-            name = w.label or wid,
+            name = WidgetDisplayName(wid, w),
             get = function()
                 return addon:IsWidgetInDrawer(drawerId, wid)
             end,
@@ -665,11 +688,10 @@ local function BuildDrawerGroup(drawerDef, drawerId, index, total)
         for id, entry in pairs(LBW.dormant) do
             if not seen[id] then
                 local wid = id
-                local wLabel = entry.widget and entry.widget.label or id
                 args["widget_" .. wid] = {
                     order = widgetOrder,
                     type = "toggle",
-                    name = wLabel .. "  |cff60ff60[D]|r",
+                    name = WidgetDisplayName(wid, entry.widget),
                     get = function()
                         return addon:IsWidgetInDrawer(drawerId, wid)
                     end,
