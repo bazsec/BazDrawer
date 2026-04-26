@@ -54,7 +54,10 @@ function QT.CreateBlock()
         block.poi = poi
     end
 
-    -- Title text
+    -- Title text. We disable wrap here and rely on FitStringToWidth
+    -- (called per-render in PopulateBlock) to scale long titles down
+    -- so they fit one line — wrapping looked cramped at the drawer's
+    -- 260 px column width.
     title.text = title:CreateFontString(nil, "OVERLAY")
     if _G[C.TITLE_FONT] then
         title.text:SetFontObject(_G[C.TITLE_FONT])
@@ -65,7 +68,18 @@ function QT.CreateBlock()
     title.text:SetPoint("RIGHT", title, "RIGHT", 0, 0)
     title.text:SetJustifyH("LEFT")
     title.text:SetJustifyV("MIDDLE")
-    title.text:SetWordWrap(true)
+    title.text:SetWordWrap(false)
+
+    -- Optional "Stage X" label that sits inside the purple scenario
+    -- stage box, above title.text. Hidden for non-scenario blocks.
+    -- Larger font than title.text since it's the headline of the
+    -- stage box, with the stage name acting as the subtitle.
+    title.stageLabel = title:CreateFontString(nil, "OVERLAY")
+    title.stageLabel:SetFontObject(_G.Game18Font_Shadow2 or _G.GameFontNormalLarge or _G.GameFontNormal)
+    title.stageLabel:SetJustifyH("LEFT")
+    title.stageLabel:SetTextColor(1.0, 0.914, 0.682)
+    title.stageLabel:SetWordWrap(false)
+    title.stageLabel:Hide()
 
     -- Title click handler
     title:SetScript("OnClick", function(self, button)
@@ -434,16 +448,89 @@ function QT.PopulateBlock(block, quest)
     if not useWidgetSet then
         block.title.text:SetText(quest.title)
         if isScenario then
-            block.title.text:ClearAllPoints()
-            block.title.text:SetPoint("LEFT",  block.title, "LEFT",  0, 0)
-            block.title.text:SetPoint("RIGHT", block.title, "RIGHT", 0, 0)
+            -- Scenario stage box: two stacked labels.
+            --   stageLabel  → "Stage X" / "Stage X of Y"   (top, larger)
+            --   text        → stage name, e.g. "The Great Calamity"
+            -- Mirrors Blizzard's tracker chrome — see screenshots in
+            -- the v2x6 commit if anyone wonders why this is two lines
+            -- instead of one. The previous behaviour squashed both into
+            -- a single title.text, so users only saw the stage name and
+            -- lost the "Stage X" context.
+            local stageLbl
+            if quest.currentStage and quest.numStages and quest.numStages > 1 then
+                stageLbl = string.format("Stage %d of %d", quest.currentStage, quest.numStages)
+            elseif quest.currentStage then
+                stageLbl = string.format("Stage %d", quest.currentStage)
+            end
+
+            if stageLbl and stageLbl ~= "" then
+                block.title.stageLabel:SetText(stageLbl)
+                block.title.stageLabel:ClearAllPoints()
+                block.title.stageLabel:SetPoint("TOPLEFT",  block.title, "TOPLEFT",  0, -2)
+                block.title.stageLabel:SetPoint("TOPRIGHT", block.title, "TOPRIGHT", 0, -2)
+                block.title.stageLabel:Show()
+
+                block.title.text:ClearAllPoints()
+                block.title.text:SetPoint("TOPLEFT",  block.title.stageLabel, "BOTTOMLEFT",  0, -2)
+                block.title.text:SetPoint("TOPRIGHT", block.title.stageLabel, "BOTTOMRIGHT", 0, -2)
+            else
+                block.title.stageLabel:Hide()
+                block.title.text:ClearAllPoints()
+                block.title.text:SetPoint("LEFT",  block.title, "LEFT",  0, 0)
+                block.title.text:SetPoint("RIGHT", block.title, "RIGHT", 0, 0)
+            end
             block.title.text:SetJustifyH("LEFT")
             block.title.text:SetJustifyV("MIDDLE")
             block.title.text:SetTextColor(1.0, 0.914, 0.682)
         else
+            block.title.stageLabel:Hide()
+            block.title.text:ClearAllPoints()
+            block.title.text:SetPoint("LEFT",  block.title, "LEFT",  0, 0)
+            block.title.text:SetPoint("RIGHT", block.title, "RIGHT", 0, 0)
             block.title.text:SetWidth(C.DESIGN_WIDTH - C.PAD * 2 - titleIndent - C.OBJ_RIGHT_PAD)
             block.title.text:SetTextColor(QT.GetTitleColor())
+            -- Shrink long titles to fit one line. The drawer is narrow
+            -- enough that names like "The Forgotten Champion of the
+            -- Sundered Hall" used to wrap onto two lines; scaling
+            -- down keeps them readable without breaking the row.
+            QT.FitStringToWidth(
+                block.title.text,
+                C.DESIGN_WIDTH - C.PAD * 2 - titleIndent - C.OBJ_RIGHT_PAD,
+                0.7
+            )
         end
+    end
+
+    -- Hover tooltip on the scenario stage box. Default tracker shows
+    -- the stage *description* (the lore line, e.g. "Assist the
+    -- haranir as they battle against unknown attackers.") only on
+    -- hover; we used to render it as an extra objective bullet, which
+    -- was visually noisy and didn't match Blizzard's behaviour.
+    if isScenario and not useWidgetSet then
+        local desc = quest.stageDescription
+        block.title:SetScript("OnEnter", function(self)
+            if not desc or desc == "" then return end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            local headline = quest.title or ""
+            if quest.currentStage and quest.numStages and quest.numStages > 1 then
+                headline = string.format("Stage %d of %d: %s", quest.currentStage, quest.numStages, headline)
+            elseif quest.currentStage then
+                headline = string.format("Stage %d: %s", quest.currentStage, headline)
+            end
+            GameTooltip:SetText(headline, 1.0, 0.82, 0.0)
+            GameTooltip:AddLine(desc, 1, 0.82, 0, true)
+            GameTooltip:Show()
+        end)
+        block.title:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    elseif not isScenario then
+        -- Restore the title's hover-color script (set in CreateBlock)
+        -- in case this block was previously a scenario.
+        block.title:SetScript("OnEnter", function(self)
+            if block.title.text then block.title.text:SetTextColor(QT.GetTitleHiColor()) end
+        end)
+        block.title:SetScript("OnLeave", function()
+            if block.title.text then block.title.text:SetTextColor(QT.GetTitleColor()) end
+        end)
     end
 
     -- Title height

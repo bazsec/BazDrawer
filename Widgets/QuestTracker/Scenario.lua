@@ -47,15 +47,14 @@ function QT.GetScenarioData()
         title = scenarioName or ""
     end
 
+    -- Build the objective list strictly from criteria. The stage's
+    -- *description* (e.g. "Assist the haranir as they battle against
+    -- unknown attackers.") was previously prepended here as an extra
+    -- objective bullet, which Blizzard's tracker doesn't do — they
+    -- show the description only as a hover tooltip on the stage box.
+    -- Pass it back as stageDescription so the renderer can wire that
+    -- tooltip without recomputing it.
     local objectives = {}
-
-    if stageDescription and stageDescription ~= "" and stageDescription ~= stageName then
-        objectives[#objectives + 1] = {
-            text     = stageDescription,
-            finished = false,
-        }
-    end
-
     local allComplete = numCriteria > 0
     for i = 1, numCriteria do
         local info
@@ -78,22 +77,17 @@ function QT.GetScenarioData()
         end
     end
 
-    if #objectives == 0 then
-        objectives[#objectives + 1] = {
-            text     = stageDescription or "In progress",
-            finished = false,
-        }
-        allComplete = false
-    end
-
     return {
-        kind         = "scenario",
-        id           = 0,
-        title        = title,
-        objectives   = objectives,
-        isComplete   = allComplete,
-        sectionLabel = sectionLabel,
-        textureKit   = textureKit,
-        widgetSetID  = widgetSetID,
+        kind             = "scenario",
+        id               = 0,
+        title            = title,
+        objectives       = objectives,
+        isComplete       = allComplete,
+        sectionLabel     = sectionLabel,
+        textureKit       = textureKit,
+        widgetSetID      = widgetSetID,
+        currentStage     = currentStage,
+        numStages        = numStages,
+        stageDescription = stageDescription,
     }
 end

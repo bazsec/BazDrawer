@@ -59,3 +59,33 @@ function QT.GetTitleColor()      return QT.BlizzColor("Header",          1.00, 0
 function QT.GetTitleHiColor()    return QT.BlizzColor("HeaderHighlight", 1.00, 1.00, 1.00) end
 function QT.GetObjectiveColor()  return QT.BlizzColor("Normal",          0.80, 0.80, 0.80) end
 function QT.GetObjectiveDone()   return QT.BlizzColor("Complete",        0.60, 0.60, 0.60) end
+
+---------------------------------------------------------------------------
+-- FitStringToWidth — shrink a FontString just enough to fit one line.
+--
+-- Blizzard's tracker has plenty of room to render long titles like
+-- "The Legend of Wey'nan's Ward" on a single line. Our drawer is a
+-- 260 px column, so the same text wraps to two lines and looks
+-- cramped. Calling this on a FontString first resets its scale to
+-- 1.0, measures the natural width, then shrinks the scale (down to a
+-- readable floor) so the whole string fits on one line.
+--
+-- The caller is responsible for SetWordWrap(false) on the FontString
+-- — without that, scaling fights the text engine's wrap logic.
+--
+-- Args:
+--   fs        FontString to fit (no-op if nil)
+--   maxWidth  pixels available for the rendered text
+--   minScale  optional floor (default 0.65 — below this gets unreadable)
+---------------------------------------------------------------------------
+
+function QT.FitStringToWidth(fs, maxWidth, minScale)
+    if not fs or not maxWidth or maxWidth <= 0 then return end
+    fs:SetTextScale(1.0)
+    local w = fs:GetStringWidth() or 0
+    if w <= 0 or w <= maxWidth then return end
+    local scale = maxWidth / w
+    local floor = minScale or 0.65
+    if scale < floor then scale = floor end
+    fs:SetTextScale(scale)
+end

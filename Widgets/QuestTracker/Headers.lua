@@ -35,6 +35,11 @@ function QT.CreateSectionHeader()
     f.text:SetPoint("RIGHT", f.chevron, "LEFT", -6, 0)
     f.text:SetJustifyH("LEFT")
     f.text:SetTextColor(QT.GetTitleColor())
+    -- The drawer is too narrow for storyline headers like
+    -- "The Legend of Wey'nan's Ward" to fit at full size, and
+    -- wrapping looked cramped. Disable wrap and let
+    -- AcquireHeader call FitStringToWidth instead.
+    f.text:SetWordWrap(false)
 
     f:RegisterForClicks("LeftButtonUp")
     f:SetScript("OnClick", function(self)
@@ -58,6 +63,11 @@ function QT.AcquireHeader(label)
     if not h then h = QT.CreateSectionHeader() end
     h._label = label
     h.text:SetText(label or "")
+    -- Available text width inside the header row:
+    --   total row width = DESIGN_WIDTH - PAD*2 (set by the layout)
+    --   internal padding = 10 left + 6 text-to-chevron gap +
+    --                      16 chevron + 8 right pad = 40
+    QT.FitStringToWidth(h.text, (C.DESIGN_WIDTH - C.PAD * 2) - 40, 0.65)
     h.chevron:SetAtlas(QT.IsGroupCollapsed(label)
         and "ui-questtrackerbutton-secondary-expand"
         or  "ui-questtrackerbutton-secondary-collapse")
