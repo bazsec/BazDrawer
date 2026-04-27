@@ -183,6 +183,12 @@ function QT.CreateBlock()
         itemBtn:SetPoint("RIGHT", block, "RIGHT", 0, 0)
         itemBtn:SetSize(26, 26)
         itemBtn:Hide()
+        -- The block's title Button spans the full width including
+        -- under the item icon, intercepting clicks before they reach
+        -- the item. Bump our frame level above the title so hover and
+        -- click on the icon land on the item button (same fix the
+        -- find-group eye uses below).
+        itemBtn:SetFrameLevel((block:GetFrameLevel() or 0) + 10)
         block.itemButton = itemBtn
     end
 
