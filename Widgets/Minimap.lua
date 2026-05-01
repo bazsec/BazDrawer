@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0-or-later
 -- BazWidgetDrawers Widget: Minimap
 --
 -- Reparents the real Minimap into a wrapper frame and registers that

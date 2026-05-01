@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0-or-later
 -- QuestTracker: Challenge Mode (M+) Block
 -- Dedicated frame for Mythic+ dungeon runs: timer bar, keystone level,
 -- affix icons, and death counter. Completely separate rendering path

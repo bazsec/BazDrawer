@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0-or-later
 -- QuestTracker: Scenario Data
 -- Reads C_Scenario / C_ScenarioInfo to build a quest-shaped data table
 -- for dungeon boss lists, Delve objectives, M+ criteria, etc.

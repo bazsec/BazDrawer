@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0-or-later
 -- QuestTracker: Section Headers
 -- Creates and pools the collapsible group headers (Campaign, Quests,
 -- Achievements, Dungeon, etc.) with Blizzard's ornamental atlas.

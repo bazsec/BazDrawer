@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0-or-later
 -- QuestTracker: Shared Mutable State
 -- Single source of truth for all cross-file state (pools, items list,
 -- scroll position, frame refs). Initialized once at file load.

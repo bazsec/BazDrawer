@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0-or-later
 -- BazWidgetDrawers: Compatibility shims
 --
 -- Defensive patches for taint propagation and third-party addon conflicts

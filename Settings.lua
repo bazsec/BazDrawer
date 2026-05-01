@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0-or-later
 -- BazWidgetDrawers Settings
 -- Landing page + Settings subcategory + Widgets subcategory.
 -- The Widgets subcategory uses BazCore's list/detail options pattern

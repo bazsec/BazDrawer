@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0-or-later
 -- QuestTracker: Data Retrieval
 -- Quest, achievement, and classification data polling. Pure read-only
 -- API calls - no frame creation or visual work.

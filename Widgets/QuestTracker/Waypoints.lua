@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0-or-later
 -- QuestTracker: Waypoint Integrations (TomTom + Zygor)
 -- Sets a waypoint arrow to the super-tracked quest's next objective
 -- via TomTom and/or Zygor when installed. Each integration is

@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0-or-later
 -- QuestTracker: Options & Blizzard Tracker Visibility
 -- Per-widget settings exposed in BazWidgetDrawers > Widgets > Quest Tracker.
 

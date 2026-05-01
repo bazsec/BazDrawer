@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0-or-later
 -- BazWidgetDrawers Widget: Minimap Info Bar
 --
 -- Horizontal bar that combines the Blizzard clock button, the

@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0-or-later
 -- BazWidgetDrawers Widget: Zone Text
 --
 -- Single-line widget that displays the current minimap zone text,

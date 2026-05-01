@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0-or-later
 -- QuestTracker: Constants & Color Helpers
 -- Shared layout constants, font references, and Blizzard color lookups.
 

@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0-or-later
 -- BazWidgetDrawers Widget: MinimapButtons
 --
 -- Scans the Minimap for LibDBIcon-registered addon buttons and reparents

@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0-or-later
 -- QuestTracker: Block Creation, Population & Pool
 -- Creates quest/scenario/achievement block frames, renders data into
 -- them via PopulateBlock, and manages the block acquisition/release pool.

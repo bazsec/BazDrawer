@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0-or-later
 -- QuestTracker: Group Collapse State
 -- Per-group collapse tracking, persisted via widgetSettings.
 

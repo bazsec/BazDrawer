@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0-or-later
 -- QuestTracker: Init, Refresh, Layout, Scroll
 -- Main widget lifecycle: frame creation, event registration, data polling
 -- loop, item-level pagination, and BazCore widget registration.

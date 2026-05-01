@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0-or-later
 -- BazWidgetDrawers Widget: Micro Menu
 --
 -- Reparents Blizzard's MicroMenuContainer into the drawer so the

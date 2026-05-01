@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0-or-later
 -- BazWidgetDrawers: Drawer frame
 -- Full-height slide-out side panel. The tab handle hangs outside the
 -- drawer's inner edge so that when the drawer is fully slid off-screen,

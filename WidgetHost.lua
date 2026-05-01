@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0-or-later
 -- BazWidgetDrawers: WidgetHost
 --
 -- Owns the vertical slot layout inside the drawer's display frame.
